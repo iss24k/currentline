@@ -1,8 +1,12 @@
 import '@fontsource-variable/instrument-sans';
 import '@fontsource/ibm-plex-mono/latin-400.css';
 import './style.css';
+import './transit.css';
 import { architecture, components, glossary, sources } from './content.js';
-import { energy, formNames } from './energy.js';
+import { energy } from './energy.js';
+import { stepsFor } from './guide-steps.js';
+import { createConversionVisual } from './conversion-visuals.js';
+import { createTransit, travelFor } from './transit.js';
 import { generation, grid, modelLabels, modelPhase, modes, phases, routeFor, selectModeFor, server, siteEntry, siteOutput } from './route.js';
 import { icon } from './icons.js';
 
@@ -12,8 +16,8 @@ const e = (value) => String(value).replace(/[&<>"']/g, (char) => ({
 
 const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 const state = {
-  source: 'gas', mode: 'utility', active: 'gas', playing: false, started: false,
-  flowFocused: false, reduced: motionPreference.matches,
+  source: 'gas', mode: 'utility', active: 'gas', step: 0, started: false,
+  busy: false, reduced: motionPreference.matches,
 };
 const count = (number) => String(number).padStart(2, '0');
 const sourceOptions = Object.entries(generation).map(([id, source]) => `<option value="${id}">${e(source.title)}</option>`).join('');
@@ -29,7 +33,7 @@ app.innerHTML = `
       </header>
       <div class="cover-copy">
         <h1 id="experience-title">From source<br>to silicon<span>.</span></h1>
-        <p>Follow electricity from the power plant to the processor.</p>
+        <p>Take the path energy takes, from the power plant to the processor.</p>
         <form class="cover-actions">
           <label class="select-wrap"><span class="sr-only">Energy source</span>
             <select id="cover-source">${sourceOptions}</select>${icon('chevron-down', 15)}
@@ -43,34 +47,34 @@ app.innerHTML = `
       <div class="scene">
         <div id="world" class="world" aria-hidden="true"></div>
         <div class="scene-shade" aria-hidden="true"></div>
-        <div id="hotspots" class="hotspots" aria-label="Components in the 3D scene"></div>
+        <div id="hotspots" class="hotspots" aria-label="Parts in the 3D scene"></div>
         <div class="world-message" id="world-message" role="status">Loading the scene…</div>
       </div>
+      <div id="transit" hidden></div>
       <header class="masthead tour-header">
         <button class="wordmark" data-action="home" aria-label="Currentline home">Currentline</button>
         <button class="plain route-trigger" data-dialog="diagram">Route ${icon('arrow-up-right', 15)}</button>
       </header>
-      <div class="scene-caption">
+      <div class="scene-caption" id="guided-caption">
         <p id="view-phase" class="phase-label"></p>
         <h2 id="component-title" tabindex="-1"></h2>
-        <p class="summary"></p>
-        <ol class="energy-flow" aria-label="Energy changes in this component"></ol>
-        <p class="storage-note" hidden></p>
-        <div class="caption-actions">
-          <button class="text-action" id="focus-flow" data-action="focus-flow" aria-pressed="false" hidden>Focus flow ${icon('crosshair', 14)}</button>
-          <button class="text-action" id="expand-parts" data-action="expand">Expand parts ${icon('layers', 15)}</button>
-        </div>
+        <section class="conversion" aria-labelledby="conversion-title">
+          <h3 id="conversion-title"></h3>
+          <figure class="conversion-visual">
+            <canvas aria-hidden="true"></canvas>
+            <figcaption><span id="conversion-input"></span>${icon('arrow-right', 13)}<span id="conversion-output"></span></figcaption>
+          </figure>
+          <p id="conversion-note"></p>
+        </section>
+        <button class="text-action" id="expand-parts" data-action="expand">Expand parts ${icon('layers', 15)}</button>
       </div>
-      <div class="transport" role="group" aria-label="Tour playback">
-        <div class="transport-buttons">
-          <button data-action="prev" class="icon-button" aria-label="Previous component" title="Previous component">${icon('arrow-left', 19)}</button>
-          <button data-action="play" id="play" class="play icon-button"></button>
-          <button data-action="next" class="icon-button" aria-label="Next component" title="Next component">${icon('arrow-right', 19)}</button>
+      <aside id="parts-inline" class="parts-inline" aria-labelledby="inline-part-title" hidden></aside>
+      <div class="transport" role="group" aria-label="Guided steps">
+        <button data-action="prev" class="icon-button" aria-label="Previous step" title="Previous step">${icon('arrow-left', 19)}</button>
+        <div class="sequence">
+          <span class="stop-count"></span><span class="sequence-dot" aria-hidden="true">/</span><span class="step-count"></span><span class="leg-distance" hidden></span>
         </div>
-        <div class="timeline">
-          <input type="range" id="scrubber" aria-label="Tour position" min="0" max="16" value="0">
-          <span class="step-count" aria-hidden="true"></span>
-        </div>
+        <button data-action="next" class="primary" id="next-step"></button>
       </div>
     </section>
   </main>
@@ -89,22 +93,26 @@ const coverSelect = app.querySelector('#cover-source');
 const coverForm = app.querySelector('.cover-actions');
 const viewer = app.querySelector('.viewer');
 const captionTitle = app.querySelector('#component-title');
+const guidedCaption = app.querySelector('#guided-caption');
 const expandButton = app.querySelector('#expand-parts');
-const flowButton = app.querySelector('#focus-flow');
 const dialog = app.querySelector('#dialog');
 const dialogBody = dialog.querySelector('.dialog-body');
 const worldMessage = app.querySelector('#world-message');
-const play = app.querySelector('#play');
 const previous = app.querySelector('[data-action="prev"]');
-const next = app.querySelector('[data-action="next"]');
-const scrubber = app.querySelector('#scrubber');
+const next = app.querySelector('#next-step');
+const routeButton = app.querySelector('.route-trigger');
+const partPanel = app.querySelector('#parts-inline');
+const visual = createConversionVisual(app.querySelector('.conversion-visual canvas'));
+const transit = createTransit(app.querySelector('#transit'));
 let stage;
 let stageLoading;
-let playbackTimer;
 let dialogTrigger;
 let dialogKind;
 let partExplorer;
 let explorerLoading;
+let partGeometry;
+let flight = 0;
+let inspectionRequest = 0;
 
 function links(ids) {
   return ids.map((id) => {
@@ -113,99 +121,113 @@ function links(ids) {
   }).join('');
 }
 
+const beats = () => stepsFor(state.active, state.mode);
+const currentBeat = () => beats()[state.step];
+
 function renderTransport() {
   const route = routeFor(state.source, state.mode);
-  const index = route.indexOf(state.active);
-  const atEnd = index === route.length - 1;
-  const label = state.playing ? 'Pause' : atEnd ? 'Replay' : 'Play tour';
-  play.innerHTML = icon(state.playing ? 'pause' : atEnd ? 'reset' : 'play', 17);
-  play.setAttribute('aria-label', label);
-  play.title = label;
-  previous.disabled = index === 0;
-  next.disabled = atEnd;
-  scrubber.max = route.length - 1;
-  updateTimeline(index);
+  const stop = route.indexOf(state.active);
+  const lastBeat = state.step === beats().length - 1;
+  const end = stop === route.length - 1 && lastBeat;
+  const label = end ? 'Replay tour' : lastBeat ? 'Continue journey' : 'Next step';
+  next.innerHTML = `${label} ${icon(end ? 'reset' : 'arrow-right', 17)}`;
+  next.dataset.nextKind = end ? 'replay' : lastBeat ? 'travel' : 'local';
+  next.disabled = state.busy;
+  previous.disabled = state.busy || (stop === 0 && state.step === 0);
+  routeButton.disabled = state.busy;
+  app.querySelector('.stop-count').textContent = `Stop ${count(stop + 1)} of ${count(route.length)}`;
+  app.querySelector('.step-count').textContent = `Step ${state.step + 1} of ${beats().length}`;
+  const leg = lastBeat && !end ? travelFor(state.active, route[stop + 1]) : null;
+  const distance = app.querySelector('.leg-distance');
+  distance.hidden = !leg?.distance;
+  distance.textContent = leg?.distance ? `${leg.distance} · ${leg.source ? 'documented example' : 'illustrative'}` : '';
 }
 
-function updateTimeline(index) {
-  const route = routeFor(state.source, state.mode);
-  scrubber.value = index;
-  scrubber.setAttribute('aria-valuetext', `${components[route[index]].title}, stop ${index + 1} of ${route.length}`);
-  scrubber.style.setProperty('--progress', `${index / (route.length - 1) * 100}%`);
-  app.querySelector('.step-count').textContent = `${count(index + 1)} / ${count(route.length)}`;
+function updateScene() {
+  if (!stage || !state.started) return;
+  stage.inspect(partGeometry ?? { beat: currentBeat() });
 }
 
-function renderSceneCaption() {
-  const current = energy[state.active];
-  const component = components[state.active];
-  const outage = ['transfer', 'ups'].includes(state.active) && state.mode !== 'utility' ? ` / ${modes[state.mode].short}` : '';
-  app.querySelector('#view-phase').textContent = current.place + outage;
-  captionTitle.textContent = component.title;
-  app.querySelector('.summary').textContent = component.summary;
-  const batteryUps = state.active === 'ups' && state.mode === 'battery';
-  const path = batteryUps ? [
-    { name: 'Battery DC', form: 'dc' }, { name: 'Inverter', form: 'dc' }, { name: '480 V AC', form: 'ac' },
-  ] : current.path;
-  app.querySelector('.energy-flow').innerHTML = path.map(({ name, form }) =>
-    `<li class="form-${form}"><span aria-hidden="true"></span><div><small>${e(formNames[form])}</small><strong>${e(name)}</strong></div></li>`
-  ).join('');
-  flowButton.hidden = !stage?.focusFlow || viewer.classList.contains('without-3d');
-  flowButton.setAttribute('aria-pressed', String(state.flowFocused));
-  const storageNote = app.querySelector('.storage-note');
-  storageNote.hidden = !state.flowFocused;
-  storageNote.textContent = current.storage ?? 'The glow marks the modeled transfer path through this component.';
-}
-
-function setSelection(id, { source = state.source, mode = selectModeFor(id, state.mode), fromTour = false, travel = 'jump' } = {}) {
-  if (!routeFor(source, mode).includes(id)) return;
-  if (!fromTour) pauseTour();
-  if (id === state.active && source === state.source && mode === state.mode) return;
-  Object.assign(state, { active: id, source, mode, flowFocused: false });
-  renderSceneCaption();
+function renderBeat() {
+  const beat = currentBeat();
+  app.querySelector('#view-phase').textContent = energy[state.active].place;
+  captionTitle.textContent = components[state.active].title;
+  app.querySelector('#conversion-title').textContent = beat.name;
+  app.querySelector('#conversion-note').textContent = beat.explanation;
+  app.querySelector('#conversion-input').textContent = beat.input;
+  app.querySelector('#conversion-output').textContent = beat.output;
+  app.querySelector('.conversion-visual').dataset.form = beat.form;
+  visual.show(beat, state.reduced);
   renderTransport();
-  stage?.update({ ...state, travel });
-  app.querySelector('#announcement').textContent = components[id].title;
+  updateScene();
+}
+
+function setSelection(id, { source = state.source, mode = selectModeFor(id, state.mode), step = 0 } = {}) {
+  if (!routeFor(source, mode).includes(id)) return;
+  inspectionRequest += 1;
+  partExplorer?.close(false);
+  const changed = id !== state.active || source !== state.source || mode !== state.mode;
+  Object.assign(state, { active: id, source, mode, step });
+  if (changed) stage?.update({ ...state, reduced: state.reduced || state.busy });
+  renderBeat();
+  app.querySelector('#announcement').textContent = `${components[id].title}. ${currentBeat().name}.`;
 }
 
 function changeMode(mode) {
   if (mode !== state.mode) setSelection(modes[mode].branch[0], { mode });
 }
 
-function moveStep(direction, fromTour = false) {
-  const route = routeFor(state.source, state.mode);
-  const nextId = route[route.indexOf(state.active) + direction];
-  if (nextId) setSelection(nextId, { fromTour, travel: 'fly' });
-}
-
-function pauseTour() {
-  clearTimeout(playbackTimer);
-  if (!state.playing) return;
-  state.playing = false;
-  renderTransport();
-}
-
-function scheduleTour() {
-  clearTimeout(playbackTimer);
-  if (state.active === routeFor(state.source, state.mode).at(-1)) {
-    pauseTour();
-    return;
-  }
-  playbackTimer = setTimeout(() => {
-    moveStep(1, true);
-    scheduleTour();
-  }, 8500);
-}
-
-function toggleTour() {
-  if (state.playing) {
-    pauseTour();
+function previousStep() {
+  if (state.busy) return;
+  if (state.step > 0) {
+    setSelection(state.active, { step: state.step - 1 });
     return;
   }
   const route = routeFor(state.source, state.mode);
-  if (state.active === route.at(-1)) setSelection(route[0]);
-  state.playing = true;
+  const id = route[route.indexOf(state.active) - 1];
+  if (id) setSelection(id, { step: stepsFor(id, selectModeFor(id, state.mode)).length - 1 });
+}
+
+async function nextStep() {
+  if (state.busy) return;
+  if (state.step < beats().length - 1) {
+    setSelection(state.active, { step: state.step + 1 });
+    return;
+  }
+  const route = routeFor(state.source, state.mode);
+  const id = route[route.indexOf(state.active) + 1];
+  if (!id) {
+    setSelection(route[0]);
+    return;
+  }
+  const leg = travelFor(state.active, id, state.source, state.mode);
+  const request = ++flight;
+  state.busy = true;
+  viewer.classList.add('is-traveling');
+  stage?.update({ ...state, reduced: true });
   renderTransport();
-  scheduleTour();
+  let revealed = false;
+  const reveal = () => {
+    if (revealed || request !== flight || !state.started) return;
+    revealed = true;
+    setSelection(id);
+  };
+  try {
+    if (leg) await transit.play(leg, { reduced: state.reduced, onReveal: reveal });
+    else reveal();
+  } catch (error) {
+    console.warn('Currentline could not play a travel segment.', error);
+    reveal();
+  } finally {
+    if (request === flight) {
+      state.busy = false;
+      viewer.classList.remove('is-traveling');
+      stage?.update(state);
+      updateScene();
+      renderTransport();
+      next.focus({ preventScroll: true });
+    }
+  }
 }
 
 const diagramOutputs = {
@@ -267,9 +289,9 @@ function renderDiagram() {
 
 function renderGuide() {
   dialogBody.innerHTML = `
-    <p class="dialog-intro">Choose Focus flow to zoom into the highlighted channel. Expand parts opens an interactive assembly. Drag to orbit, scroll or press + or − to zoom, and press 0 to reset.</p>
-    <section><h3>Reading the glowing trace</h3><p>The moving light represents energy transfer. Before generation it can follow fuel, moving water, hot gas, or a spinning shaft. On the AC grid electrons move back and forth locally, and many generators feed the same network. Transmission scenes highlight one conductor to make the three-phase route easier to see. At transformers, the glow changes to blue where a magnetic field transfers energy between windings. The electrical route ends at the processor. The final scene follows the heat it produces.</p>
-    <p>The locations are teaching composites. The equipment layouts and paths are representative. Supplier links point to publicly documented examples of the part type.</p></section>
+    <p class="dialog-intro">Use Next step to follow energy through each machine. Continue journey takes you to the next location. Expand parts opens the machine in place.</p>
+    <section><h3>Following the bead</h3><p>The bead marks the path energy takes. It can stand for fuel, heat, motion, or power. On the AC grid, electrons move back and forth near where they started. The highlight follows one phase to keep the route readable.</p>
+    <p>The tour combines a representative power system with distances that are labeled as examples. The long transmission leg uses the length of Bonneville Power Administration’s 230 kV McNary–Roundup line, about 62 km. Travel time is compressed. <a class="source-link" href="${travelFor('lines', 'substation').source}" target="_blank" rel="noreferrer">BPA line and length ${icon('arrow-up-right', 12)}</a></p></section>
     <div class="reference-links">
       <label class="motion-setting"><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}> Reduce motion</label>
       <button class="text-action" data-dialog="sources">Sources ${icon('arrow-up-right', 13)}</button>
@@ -299,7 +321,7 @@ function renderSources() {
 }
 
 function openDialog(kind, trigger) {
-  pauseTour();
+  if (state.busy) return;
   if (!dialog.open) dialogTrigger = trigger;
   dialogKind = kind;
   dialog.querySelector('h2').textContent = { diagram: 'Journey route', guide: 'About Currentline', sources: 'Sources' }[kind];
@@ -312,7 +334,11 @@ function openDialog(kind, trigger) {
 function setReduced(value) {
   state.reduced = value;
   viewer.toggleAttribute('data-reduced', value);
-  if (state.started) stage?.update(state);
+  if (state.started) {
+    stage?.update(state);
+    renderBeat();
+    partExplorer?.refresh();
+  }
   const motionControl = dialogBody.querySelector('#reduce-motion');
   if (motionControl) motionControl.checked = value;
 }
@@ -320,9 +346,8 @@ function setReduced(value) {
 function showUnavailable() {
   viewer.classList.remove('with-3d');
   viewer.classList.add('without-3d');
-  worldMessage.textContent = 'The scene needs WebGL 2. The route and parts diagrams are still available.';
+  worldMessage.textContent = 'The 3D scene needs WebGL 2. The guided diagrams and parts are available here.';
   worldMessage.hidden = false;
-  flowButton.hidden = true;
 }
 
 function startTour(event) {
@@ -330,39 +355,36 @@ function startTour(event) {
   cover.hidden = true;
   viewer.hidden = false;
   const source = coverSelect.value;
-  Object.assign(state, { source, active: generation[source].stops[0], mode: 'utility', started: true, flowFocused: false, playing: !state.reduced });
+  Object.assign(state, { source, active: generation[source].stops[0], mode: 'utility', started: true, step: 0, busy: false });
   viewer.toggleAttribute('data-reduced', state.reduced);
-  renderSceneCaption();
-  renderTransport();
+  stage?.update(state);
+  renderBeat();
   captionTitle.focus({ preventScroll: true });
-  if (stage) stage.update(state);
   stageLoading ??= import('./stage.js').then(({ createStage }) => {
     stage = createStage({
       mount: app.querySelector('#world'), hotspots: app.querySelector('#hotspots'),
-      select: setSelection, onUnavailable: showUnavailable, onInteract: pauseTour,
-      onViewReset() {
-        state.flowFocused = false;
-        renderSceneCaption();
-      },
+      select: () => {}, selectPart: (index) => partExplorer?.select(index), onUnavailable: showUnavailable,
     });
     worldMessage.hidden = true;
     viewer.classList.add('with-3d');
     if (state.started) {
       stage.update(state);
-      renderSceneCaption();
+      updateScene();
     }
   }).catch((error) => {
     console.warn('Currentline could not start the 3D view.', error);
     showUnavailable();
   });
-  stageLoading.then(() => {
-    if (state.started && state.playing) scheduleTour();
-  });
 }
 
 function showCover() {
-  pauseTour();
+  flight += 1;
+  inspectionRequest += 1;
+  transit.cancel();
+  partExplorer?.close(false);
   state.started = false;
+  state.busy = false;
+  viewer.classList.remove('is-traveling');
   stage?.update({ ...state, reduced: true });
   coverSelect.value = state.source;
   viewer.hidden = true;
@@ -371,23 +393,33 @@ function showCover() {
 }
 
 async function openParts() {
-  pauseTour();
+  if (state.busy || !state.started) return;
+  const request = ++inspectionRequest;
   expandButton.disabled = true;
   try {
     explorerLoading ??= import('./part-explorer.js');
     const { createPartExplorer } = await explorerLoading;
-    if (!state.started) return;
-    partExplorer ??= createPartExplorer({
-      onClose() {
-        stage?.update(state);
-        expandButton.focus({ preventScroll: true });
+    if (request !== inspectionRequest || !state.started) return;
+    partExplorer ??= createPartExplorer(partPanel, {
+      reduced: () => state.reduced,
+      onGeometry(geometry) {
+        partGeometry = geometry;
+        updateScene();
+      },
+      onClose(restoreFocus) {
+        partGeometry = null;
+        viewer.classList.remove('parts-open');
+        guidedCaption.hidden = false;
+        renderBeat();
+        if (restoreFocus) expandButton.focus({ preventScroll: true });
       },
     });
-    stage?.update({ ...state, reduced: true });
-    partExplorer.open(state.active, { reduced: state.reduced });
+    viewer.classList.add('parts-open');
+    guidedCaption.hidden = true;
+    partExplorer.open(state.active);
   } catch (error) {
-    console.warn('Currentline could not load the parts explorer.', error);
-    app.querySelector('#announcement').textContent = 'The parts explorer could not load.';
+    console.warn('Currentline could not load the parts view.', error);
+    app.querySelector('#announcement').textContent = 'The parts view could not load.';
   } finally {
     expandButton.disabled = false;
   }
@@ -395,32 +427,12 @@ async function openParts() {
 
 coverForm.addEventListener('submit', startTour);
 motionPreference.addEventListener('change', (event) => setReduced(event.matches));
-scrubber.addEventListener('input', () => {
-  const index = Number(scrubber.value);
-  pauseTour();
-  updateTimeline(index);
-});
-scrubber.addEventListener('change', () => {
-  setSelection(routeFor(state.source, state.mode)[Number(scrubber.value)]);
-});
 dialog.addEventListener('close', () => {
   dialogKind = null;
   dialogTrigger?.focus({ preventScroll: true });
 });
 dialog.addEventListener('click', (event) => {
   if (event.target === dialog) dialog.close();
-});
-viewer.addEventListener('keydown', (event) => {
-  if (!stage || event.ctrlKey || event.metaKey || event.target.matches('input, select, textarea')) return;
-  if (event.key === '+' || event.key === '=' || event.key === '-' || event.key === '0') {
-    event.preventDefault();
-    pauseTour();
-    if (event.key === '0') {
-      state.flowFocused = false;
-      stage.reset();
-      renderSceneCaption();
-    } else stage.zoom(event.key === '-' ? 1.2 : .83);
-  }
 });
 dialogBody.addEventListener('change', (event) => {
   const input = event.target;
@@ -437,10 +449,9 @@ app.addEventListener('click', (event) => {
   if (!button) return;
   const { action, dialog: kind, go, goMode, mode } = button.dataset;
   if (kind) openDialog(kind, button);
-  if (go) {
-    if (dialogKind === 'diagram') dialog.close();
+  if (go && dialogKind === 'diagram') {
+    dialog.close();
     setSelection(go, { mode: goMode ?? selectModeFor(go, state.mode) });
-    if ('hotspot' in button.dataset && !button.isConnected && event.detail === 0) captionTitle.focus({ preventScroll: true });
   }
   if (mode) {
     changeMode(mode);
@@ -449,17 +460,9 @@ app.addEventListener('click', (event) => {
     dialogBody.querySelector(`[data-mode="${mode}"]`)?.focus({ preventScroll: true });
     dialogBody.scrollTop = scroll;
   }
-  if (!action) return;
   if (action === 'home') showCover();
   if (action === 'close') dialog.close();
-  if (action === 'play') toggleTour();
-  if (action === 'prev' || action === 'next') moveStep(action === 'prev' ? -1 : 1);
-  if (action === 'focus-flow' && stage?.focusFlow) {
-    pauseTour();
-    state.flowFocused = !state.flowFocused;
-    if (state.flowFocused) stage.focusFlow();
-    else stage.reset();
-    renderSceneCaption();
-  }
+  if (action === 'prev') previousStep();
+  if (action === 'next') nextStep();
   if (action === 'expand') openParts();
 });

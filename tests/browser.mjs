@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import axe from 'axe-core';
 import { components, sources } from '../src/content.js';
 import { generation, routeFor } from '../src/route.js';
+import { stepsFor } from '../src/guide-steps.js';
 
 const url = process.env.CURRENTLINE_TEST_URL ?? 'http://127.0.0.1:4173/';
 const output = new URL('../test-results/', import.meta.url);
@@ -12,17 +13,15 @@ const browser = await chromium.launch({
   chromiumSandbox: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
-const pageErrors = [];
-page.on('pageerror', (error) => pageErrors.push(error.message));
+const errors = [];
+page.on('pageerror', (error) => errors.push(error.message));
 const report = (message) => console.log(`✓ ${message}`);
 const shot = (name, target = page) => target.screenshot({ path: new URL(`${name}.png`, output).pathname, fullPage: true });
-const diagram = page.getByRole('dialog');
-const routeTrigger = page.getByRole('button', { name: 'Route', exact: true });
-const next = page.getByRole('button', { name: 'Next component', exact: true });
+const next = (target = page) => target.locator('#next-step');
 
-async function checkActive(id, target = page) {
+async function checkActive(id, step = 0, target = page, mode = 'utility') {
   assert.equal(await target.locator('#component-title').textContent(), components[id].title);
-  assert.match(await target.getByRole('slider', { name: 'Tour position' }).getAttribute('aria-valuetext'), new RegExp(components[id].title, 'i'));
+  assert.equal(await target.locator('#conversion-title').textContent(), stepsFor(id, mode)[step].name);
 }
 
 async function checkAccessibility(target) {
@@ -42,9 +41,8 @@ async function jump(id, target = page) {
 }
 
 async function waitForScene(target = page) {
-  await target.locator('.with-3d canvas').waitFor({ state: 'visible' });
+  await target.locator('.with-3d #world canvas').waitFor({ state: 'visible' });
   await target.locator('#world[data-camera-moving]').waitFor({ state: 'hidden' });
-  await target.locator('.spot[aria-current]:visible').waitFor();
 }
 
 try {
@@ -52,136 +50,109 @@ try {
   await page.goto(url);
   await page.getByRole('heading', { name: 'From source to silicon.' }).waitFor();
   assert.equal(await page.getByRole('button').count(), 2);
-  assert.equal(await page.locator('canvas').count(), 0);
   await checkAccessibility(page);
-  await shot('cinematic-cover');
 
   for (const source of Object.keys(generation)) {
     if (await page.locator('.viewer').isVisible()) await page.getByRole('button', { name: 'Currentline home' }).click();
     await start(source);
     await waitForScene();
-    for (const [index, id] of routeFor(source, 'utility').entries()) {
-      if (index) await next.click();
-      await checkActive(id);
+    const route = routeFor(source, 'utility');
+    for (const [stop, id] of route.entries()) {
+      for (const [step] of stepsFor(id, 'utility').entries()) {
+        if (step || stop) await next().click();
+        await checkActive(id, step);
+      }
     }
-    assert.ok(await next.isDisabled());
-    report(`${generation[source].title} to the processor and heat removal`);
+    assert.equal(await next().getAttribute('data-next-kind'), 'replay');
+    report(`${generation[source].title} through every local conversion to heat removal`);
   }
 
   await page.getByRole('button', { name: 'Currentline home' }).click();
   await start();
   await waitForScene();
+  await jump('gas-turbine');
+  await next().click();
+  await checkActive('gas-turbine', 1);
+  assert.equal(await page.locator('.conversion-visual').getAttribute('data-form'), 'thermal');
   await checkAccessibility(page);
-  await shot('cinematic-generation');
-  await page.getByRole('slider', { name: 'Tour position' }).press('ArrowRight');
-  await checkActive('gas-turbine');
-  await page.getByRole('button', { name: 'Focus flow' }).click();
-  assert.equal(await page.getByRole('button', { name: 'Focus flow' }).getAttribute('aria-pressed'), 'true');
-  assert.match(await page.locator('.storage-note').textContent(), /chemical energy/);
-  await shot('focused-turbine-flow');
+  await shot('guided-combustion');
+  const sceneCanvas = await page.locator('#world canvas').elementHandle();
+  const stageId = await page.locator('#world').getAttribute('data-journey-environment');
   await page.getByRole('button', { name: 'Expand parts' }).click();
-  const explorer = page.locator('dialog.part-explorer');
-  const partRail = explorer.locator('.part-rail');
-  await explorer.locator('canvas').waitFor({ state: 'visible' });
+  const panel = page.locator('#parts-inline');
+  const picker = panel.getByRole('group', { name: 'Parts in this assembly' });
+  await panel.waitFor({ state: 'visible' });
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  assert.equal(await sceneCanvas.evaluate((node) => node === document.querySelector('#world canvas')), true);
+  assert.equal(await page.locator('#world').getAttribute('data-journey-environment'), stageId);
+  assert.equal(await page.locator('#world').getAttribute('data-assembly-style'), 'equipment');
   await checkAccessibility(page);
-  await shot('exploded-turbine');
+  await shot('onsite-exploded-turbine');
+  await panel.getByRole('button', { name: 'Photo', exact: true }).click();
+  await panel.locator('img').evaluate((image) => image.decode());
+  assert.equal(await panel.locator('img').evaluate((image) => image.naturalWidth), 3840);
+  await panel.getByRole('button', { name: 'Diagram', exact: true }).click();
   for (const name of ['Hot-gas turbine stages', 'Rotating turbine blade', 'Airfoil', 'Surface coating system', 'Load-bearing substrate']) {
-    await partRail.getByRole('button', { name: new RegExp(name) }).first().click();
-    await explorer.getByRole('button', { name: 'Expand this part' }).click();
+    await picker.getByRole('button', { name: new RegExp(name) }).first().click();
+    await panel.getByRole('button', { name: 'Open this part' }).click();
   }
-  await partRail.getByRole('button', { name: /Gamma-prime precipitates/ }).click();
-  assert.equal(await explorer.locator('#part-name').textContent(), 'Gamma-prime precipitates');
-  await explorer.getByText('Technical references', { exact: true }).click();
-  assert.ok(await explorer.getByRole('link', { name: /NETL/ }).first().isVisible());
-  await shot('blade-microstructure');
-  await page.keyboard.press('Escape');
-  assert.ok(await explorer.isHidden());
-  assert.equal(await page.locator('#expand-parts').evaluate((button) => button === document.activeElement), true);
-  const stageCanvas = page.locator('#world canvas');
-  const bounds = await stageCanvas.boundingBox();
-  await stageCanvas.dblclick({ position: { x: bounds.width * .68, y: bounds.height * .54 } });
-  assert.equal(await page.getByRole('button', { name: 'Focus flow' }).getAttribute('aria-pressed'), 'false');
-  report('keyboard timeline, glowing flow focus, exploded model and five nested part levels');
+  await picker.getByRole('button', { name: /Gamma-prime precipitates/ }).click();
+  assert.equal(await panel.locator('#inline-part-title').textContent(), 'Gamma-prime precipitates');
+  await panel.getByRole('button', { name: 'References', exact: true }).click();
+  assert.ok(await panel.getByRole('link', { name: /NETL/ }).first().isVisible());
+  await panel.getByRole('button', { name: 'Assemble', exact: true }).click();
+  assert.ok(await panel.isHidden());
+  await checkActive('gas-turbine', 1);
+  report('same live assembly, no parts modal, five nested part levels, diagrams and real reference photography');
 
-  await jump('lines');
-  await waitForScene();
-  await shot('cinematic-grid');
+  const routeTrigger = page.getByRole('button', { name: 'Route', exact: true });
+  const route = page.getByRole('dialog');
   await routeTrigger.click();
-  await diagram.getByRole('button', { name: 'Battery bridge', exact: true }).click();
-  await checkActive('battery');
-  assert.equal(await diagram.locator('[data-go="battery"][aria-current]').count(), 1);
-  await shot('cinematic-route');
-  await diagram.locator('[data-go-mode="generator"][data-go="transfer"]').click();
-  await checkActive('transfer');
-  assert.equal(await routeTrigger.evaluate((button) => document.activeElement === button), true);
-  await routeTrigger.click();
-  assert.equal(await diagram.locator('[data-go="transfer"][aria-current]').count(), 1);
-  for (const [button, active] of [['Battery bridge', 'battery'], ['Generator online', 'generator'], ['Utility', 'intake']]) {
-    await diagram.getByRole('button', { name: button, exact: true }).click();
-    await checkActive(active);
+  for (const [button, id, mode] of [['Battery bridge', 'battery', 'battery'], ['Generator online', 'generator', 'generator'], ['Utility', 'intake', 'utility']]) {
+    await route.getByRole('button', { name: button, exact: true }).click();
+    await checkActive(id, 0, page, mode);
   }
-  await diagram.getByRole('button', { name: 'Sources', exact: true }).click();
-  assert.equal(await diagram.locator('.bibliography li').count(), Object.keys(sources).length);
+  await route.getByRole('button', { name: 'Sources', exact: true }).click();
+  assert.equal(await route.locator('.bibliography li').count(), Object.keys(sources).length);
   await page.keyboard.press('Escape');
-  await jump('chip');
+  await jump('heat');
   await waitForScene();
-  await shot('cinematic-processor');
-  await next.click();
-  await checkActive('heat');
-  await waitForScene();
-  await shot('heat-leaves-server');
-  report('three power branches, route jumps, focus restoration, bibliography');
+  await shot('guided-heat-removal');
+  report('three power branches and terminal heat demonstration');
 
-  await page.getByRole('button', { name: 'Currentline home' }).click();
-  await start();
-  await page.clock.install();
-  await page.getByRole('button', { name: 'Play tour', exact: true }).click();
-  await page.clock.fastForward(8700);
-  await checkActive('gas-turbine');
-  await page.getByRole('button', { name: 'Pause', exact: true }).click();
-  await page.clock.fastForward(9000);
-  await checkActive('gas-turbine');
-  report('guided tour advances and pauses');
-
-  const animated = await browser.newPage({ viewport: { width: 1366, height: 768 }, reducedMotion: 'no-preference' });
+  const animated = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: 'no-preference' });
+  animated.on('pageerror', (error) => errors.push(error.message));
   await animated.goto(url);
   await start('gas', animated);
   await waitForScene(animated);
-  await animated.getByRole('button', { name: 'Pause', exact: true }).click();
-  const transport = await animated.locator('.transport').boundingBox();
-  assert.ok(transport.y + transport.height <= 768);
   await jump('lines', animated);
+  await next(animated).click();
+  await next(animated).click();
+  const travel = animated.locator('#transit');
+  await travel.waitFor({ state: 'visible' });
+  assert.match(await travel.textContent(), /62 km/);
+  assert.match(await travel.textContent(), /documented/i);
+  await animated.waitForFunction(() => Number(document.querySelector('#transit').style.opacity) >= .95);
+  await shot('transmission-film', animated);
+  await travel.waitFor({ state: 'hidden' });
+  await checkActive('substation', 0, animated);
   await waitForScene(animated);
-  const transmissionSite = await animated.locator('#world').getAttribute('data-journey-environment');
-  await animated.getByRole('button', { name: 'Next component' }).click();
-  await animated.locator('#world[data-camera-moving]').waitFor({ state: 'attached' });
-  await waitForScene(animated);
-  const utilitySite = await animated.locator('#world').getAttribute('data-journey-environment');
-  assert.ok(transmissionSite && utilitySite && transmissionSite !== utilitySite);
-  const canvas = animated.locator('canvas');
-  const before = await canvas.screenshot();
-  const { x, y, width, height } = await canvas.boundingBox();
-  await animated.mouse.move(x + width * .67, y + height * .58);
-  await animated.mouse.down();
-  await animated.mouse.move(x + width * .67 + 80, y + height * .58 + 24, { steps: 6 });
-  await animated.mouse.up();
-  assert.equal(before.equals(await canvas.screenshot()), false);
-  report('animated camera, desktop playback layout, and live drag orbit');
+  await shot('guided-substation', animated);
+  assert.equal(await animated.locator('#world').getAttribute('data-journey-environment'), 'utility-substation');
+  report('animated transmission film, documented distance, and reveal at the next location');
 
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   await mobile.goto(url);
-  await shot('cinematic-mobile-cover', mobile);
   await start('solar', mobile);
   await waitForScene(mobile);
   assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
-  await shot('cinematic-mobile-solar', mobile);
+  await shot('mobile-guided-solar', mobile);
   await mobile.getByRole('button', { name: 'Expand parts' }).click();
-  await mobile.locator('dialog.part-explorer canvas').waitFor({ state: 'visible' });
-  await shot('mobile-exploded-solar', mobile);
-  assert.deepEqual(pageErrors, []);
-  report('responsive mobile layout and no browser errors');
+  await mobile.locator('#parts-inline').waitFor({ state: 'visible' });
+  await shot('mobile-onsite-parts', mobile);
+  report('mobile guided scene and in-place parts');
 
-  const fallback = await browser.newPage();
+  const fallback = await browser.newPage({ reducedMotion: 'reduce' });
   await fallback.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (kind, ...options) {
@@ -191,19 +162,16 @@ try {
   await fallback.goto(url);
   await start('wind', fallback);
   await fallback.locator('.without-3d').waitFor();
-  await checkActive('wind', fallback);
-  await jump('chip', fallback);
-  await checkActive('chip', fallback);
+  await checkActive('wind', 0, fallback);
+  await next(fallback).click();
+  await checkActive('wind', 1, fallback);
   await fallback.getByRole('button', { name: 'Expand parts' }).click();
-  await fallback.locator('.parts-without-webgl .part-rail button').first().waitFor({ state: 'visible' });
-  await fallback.getByRole('button', { name: 'Journey', exact: true }).click();
-  await fallback.getByRole('button', { name: 'Currentline home' }).click();
-  await fallback.clock.install();
-  await start('wind', fallback);
-  await fallback.getByRole('button', { name: 'Pause', exact: true }).waitFor();
-  await fallback.clock.fastForward(9000);
-  await checkActive('wind-converter', fallback);
-  report('WebGL unavailable fallback and playback after reopening');
+  await fallback.locator('#parts-inline .inline-part-picker button').first().waitFor({ state: 'visible' });
+  await fallback.getByRole('button', { name: 'Assemble', exact: true }).click();
+  await jump('chip', fallback);
+  await checkActive('chip', 0, fallback);
+  assert.deepEqual(errors, []);
+  report('WebGL fallback and no unhandled browser errors');
 } finally {
   await browser.close();
 }

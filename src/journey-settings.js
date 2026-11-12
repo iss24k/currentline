@@ -578,25 +578,62 @@ export function createJourneySettings(scene, floorMaterial) {
 
 export function heatModel() {
   const group = new THREE.Group();
+  const spreaderGroup = new THREE.Group();
+  const interfaceGroup = new THREE.Group();
+  const sinkGroup = new THREE.Group();
+  const fanGroup = new THREE.Group();
   const substrate = finish(0x354d40, .24, .75);
   const spreader = finish(0xac7650, .56, .35);
+  const interfacePad = finish(0x46696b, .13, .52);
   const fin = finish(0x869394, .74, .33);
+  group.add(spreaderGroup, interfaceGroup, sinkGroup, fanGroup);
   block(group, substrate, 0, .17, 0, 5.38, .34, 3.5);
   block(group, paint.dark, -.11, .45, -.12, 2.84, .22, 2.34);
-  block(group, spreader, -.10, .64, -.12, 2.69, .19, 2.27);
-  block(group, fin, -.10, .81, -.12, 2.92, .16, 2.38);
+  block(spreaderGroup, spreader, -.10, .64, -.12, 2.69, .19, 2.27);
+  block(interfaceGroup, interfacePad, -.10, .76, -.12, 2.67, .048, 2.27);
+  block(sinkGroup, fin, -.10, .845, -.12, 2.92, .12, 2.38);
   for (let i = 0; i < 19; i++) {
-    block(group, fin, -.10, 1.18, -.12 - .98 + i * .11, 2.71, .62, .046);
+    block(sinkGroup, fin, -.10, 1.18, -.12 - .98 + i * .11, 2.71, .62, .046);
   }
   for (const x of [-1.21, 1.0]) {
-    cylinder(group, spreader, x, .64, -.12, .075, .075, 2.34).rotation.x = Math.PI / 2;
+    cylinder(spreaderGroup, spreader, x, .64, -.12, .075, .075, 2.34).rotation.x = Math.PI / 2;
   }
   for (const x of [-2.41, 2.41]) for (const z of [-1.51, 1.51]) {
     cylinder(group, paint.steel, x, .38, z, .084, .084, .11);
   }
-  for (const part of group.children) {
+
+  const fanX = -2.12;
+  const fanY = 1.06;
+  const fanZ = -.12;
+  for (const z of [-1.09, .85]) block(fanGroup, paint.bracing, fanX, fanY, z, .62, 1.29, .10);
+  for (const y of [.44, 1.68]) block(fanGroup, paint.bracing, fanX, y, fanZ, .62, .10, 2.04);
+  const outerRing = new THREE.Mesh(new THREE.TorusGeometry(.55, .052, 10, 32), paint.steel);
+  outerRing.position.set(fanX - .25, fanY, fanZ);
+  outerRing.rotation.y = Math.PI / 2;
+  fanGroup.add(outerRing);
+  const rotor = new THREE.Group();
+  rotor.position.set(fanX, fanY, fanZ);
+  rotor.userData.spin = { axis: 'x', speed: 5.6 };
+  fanGroup.add(rotor);
+  cylinder(rotor, paint.bracing, 0, 0, 0, .13, .13, .28, Math.PI / 2);
+  for (let index = 0; index < 6; index += 1) {
+    const pivot = new THREE.Group();
+    pivot.rotation.x = index * Math.PI / 3;
+    rotor.add(pivot);
+    const blade = block(pivot, paint.steel, 0, .31, 0, .059, .35, .165);
+    blade.rotation.y = .54;
+    blade.rotation.x = .31;
+  }
+  group.traverse((part) => {
+    if (!part.isMesh) return;
     part.castShadow = true;
     part.receiveShadow = true;
-  }
+  });
+  group.userData.inspection = [
+    { name: 'Integrated heat spreader', nodes: [spreaderGroup], anchor: [-.10, .64, -.12], axis: [.10, .28, .95], distance: 1.32 },
+    { name: 'External thermal interface', nodes: [interfaceGroup], anchor: [-.10, .76, -.12], axis: [.40, .64, .43], distance: 1.48 },
+    { name: 'Passive heat sink', nodes: [sinkGroup], anchor: [-.10, 1.19, -.12], axis: [0, 1, 0], distance: 1.15 },
+    { name: 'Server fan and air duct', nodes: [fanGroup], anchor: [fanX, fanY, fanZ], axis: [-1, .16, 0], distance: 1.22 },
+  ];
   return group;
 }

@@ -158,6 +158,52 @@ function localPaths(id, mode) {
   return paths;
 }
 
+export function beatPathForm(id, mode, segment) {
+  return localPaths(id, mode)[segment]?.[0];
+}
+
+// Keep the illustrated bead on the model's local route between two fractions of a path segment.
+export function beatPath(id, mode, segment, span = [0, 1], anchor) {
+  const points = localPaths(id, mode)[segment]?.[1];
+  if (!points || points.length < 2) return undefined;
+  const lengths = [0];
+  for (let index = 1; index < points.length; index += 1) {
+    const displacement = points[index].map((axis, axisIndex) => axis - points[index - 1][axisIndex]);
+    lengths.push(lengths.at(-1) + Math.hypot(...displacement));
+  }
+  const total = lengths.at(-1);
+  let start = THREE.MathUtils.clamp(span[0], 0, 1) * total;
+  let end = THREE.MathUtils.clamp(span[1], 0, 1) * total;
+  const at = (distance) => {
+    const index = lengths.findIndex((length) => length >= distance);
+    if (index <= 0) return [...points[index === 0 ? 0 : points.length - 1]];
+    const ratio = (distance - lengths[index - 1]) / (lengths[index] - lengths[index - 1] || 1);
+    return points[index - 1].map((axis, axisIndex) => THREE.MathUtils.lerp(axis, points[index][axisIndex], ratio));
+  };
+  if (anchor) {
+    let nearest = Infinity;
+    let destination = end;
+    for (let index = 1; index < points.length; index += 1) {
+      const edgeStart = lengths[index - 1];
+      const edgeEnd = lengths[index];
+      if (edgeEnd <= edgeStart || edgeEnd < start || edgeStart > end) continue;
+      const a = points[index - 1];
+      const direction = points[index].map((axis, axisIndex) => axis - a[axisIndex]);
+      const length = edgeEnd - edgeStart;
+      const dot = direction.reduce((sum, axis, axisIndex) => sum + axis * (anchor[axisIndex] - a[axisIndex]), 0);
+      const distance = THREE.MathUtils.clamp(edgeStart + dot / length, Math.max(start, edgeStart), Math.min(end, edgeEnd));
+      const gap = Math.hypot(...at(distance).map((axis, axisIndex) => axis - anchor[axisIndex]));
+      if (gap < nearest) {
+        nearest = gap;
+        destination = distance;
+      }
+    }
+    end = destination;
+    if (end - start < total * .055) start = Math.max(0, end - total * .18);
+  }
+  return [at(start), ...points.filter((_, index) => lengths[index] > start && lengths[index] < end), at(end)];
+}
+
 function place(point, id, source) {
   const [x, z] = worldPosition(id, source);
   return new THREE.Vector3(x + point[0], point[1], z + point[2]);

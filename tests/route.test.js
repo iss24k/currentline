@@ -95,3 +95,32 @@ test('every stop has a labeled energy path and a researched parts hierarchy', ()
   assert.ok(energy.battery.storage && energy.hydro.storage);
   assert.ok(energy.heat.path.every(({ form }) => form === 'thermal'));
 });
+
+test('local guide paths and distance disclosures cover every adjacent leg', async () => {
+  const { stepsFor } = await import('../src/guide-steps.js');
+  const { beatPath } = await import('../src/energy-trace.js');
+  const { travelFor } = await import('../src/transit.js');
+  for (const id of Object.keys(components)) {
+    for (const mode of Object.keys(modes)) {
+      assert.ok(stepsFor(id, mode).length >= 2, id);
+      for (const step of stepsFor(id, mode)) {
+        const path = beatPath(id, mode, step.segment, step.span);
+        assert.ok(step.name && step.explanation && step.input && step.output && step.visual, id);
+        assert.ok(path?.length >= 2 && path.every((point) => point.every(Number.isFinite)), id);
+      }
+    }
+  }
+  for (const source of Object.keys(generation)) {
+    for (const mode of Object.keys(modes)) {
+      const route = routeFor(source, mode);
+      for (let i = 1; i < route.length; i += 1) {
+        const leg = travelFor(route[i - 1], route[i], source, mode);
+        assert.ok(leg?.title && leg.qualifier, `${route[i - 1]} → ${route[i]}`);
+      }
+    }
+  }
+  const transmission = travelFor('lines', 'substation');
+  assert.match(transmission.distance, /62 km/);
+  assert.match(transmission.qualifier, /documented/i);
+  assert.equal(new URL(transmission.source).protocol, 'https:');
+});

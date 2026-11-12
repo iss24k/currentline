@@ -2,7 +2,7 @@
 
 Currentline is an interactive 3D field guide to electrical energy. Choose natural gas, nuclear, solar, wind, or hydroelectric generation and follow the conversions through the grid, a data center, and a server down to its processor and the heat it produces.
 
-Select an energy source and begin the full-screen tour. Use **Next** to fly along the energy path. **Focus flow** moves the camera to the active channel or storage point, and **Expand parts** opens a selectable schematic 3D breakdown with materials, functions and documented supplier examples. **Route** opens the diagram and backup branches.
+Select an energy source and start the guided tour. **Next step** follows the bead through the active machine, with a diagram of what changes at each stop. **Continue journey** plays a short travel sequence before the next location. **Expand parts** separates the equipment in the live scene. Select a part to see its diagram, material, or public references.
 
 ![The Currentline parts explorer showing the major assemblies of a combustion turbine](docs/currentline.webp)
 
@@ -17,7 +17,7 @@ npm ci
 npm run dev
 ```
 
-Open the loopback URL printed by Vite, normally `http://127.0.0.1:5173`. The experience runs locally and needs no account, API key, or hosted backend. For the 3D viewer, use a WebGL 2-capable browser. The journey map, parts hierarchy, guide and bibliography also work when WebGL 2 is unavailable. **Reduce motion** follows your system preference initially and can be changed under **About** or **Route → Field guide**. Drag to orbit, scroll or press +/− to zoom, and double-click or press 0 to reset.
+Open the loopback URL printed by Vite, normally `http://127.0.0.1:5173`. The experience runs locally and needs no account, API key, or hosted backend. For the 3D viewer, use a WebGL 2-capable browser. The guided diagrams, journey map, parts hierarchy, and bibliography also work when WebGL 2 is unavailable. **Reduce motion** follows your system preference initially and can be changed under **About** or **Route → Field guide**. The camera uses fixed, guided viewpoints.
 
 ## The architecture in the exhibit
 
@@ -28,7 +28,7 @@ Currentline follows one protected IT power path in a representative **U.S. 60 Hz
 - **Generator online:** transfer gear selects generator AC once available. The UPS again converts incoming AC to DC and back to AC.
 - **Downstream:** UPS → floor PDU transformer at 208Y/120 V → busway → rack PDU → 208 V AC server cord → 12 V DC supply → board regulator at about 1 V DC for the example core rail.
 
-The field guide explains AC, DC, voltage, power and energy, plus other facility layouts and DC rack architectures. The outdoor sites, equipment rooms and server interiors are representative teaching environments. Equipment geometry, spacing, timing and voltage levels are schematic. The grid combines electricity from multiple sources. Moving lights represent energy transfer, and charge carriers move locally. This project is an educational exhibit. The final stop follows heat through an example air-cooled server. Facility cooling design, detailed protection coordination and redundancy remain outside the exhibit’s scope.
+The field guide explains AC, DC, voltage, power and energy, plus other facility layouts and DC rack architectures. The outdoor sites, equipment rooms and server interiors are representative teaching environments. The travel sequences show physical-scale example distances and compress time. The 230 kV leg uses the documented BPA McNary–Roundup line length as a reference. Equipment geometry and voltage levels are schematic. The grid combines electricity from multiple sources. Moving lights represent energy transfer, and charge carriers move locally. This project is an educational exhibit. The final stop follows heat through an example air-cooled server. Facility cooling design, detailed protection coordination and redundancy remain outside the exhibit’s scope.
 
 ## Research
 
@@ -39,6 +39,10 @@ The app’s **Sources** panel lists the component and architecture references. E
 - [Eaton — Selecting Protective Devices Handbook, data center diagram](https://www.eaton.com/content/dam/eaton/products/electrical-circuit-protection/fuses/short-circuit-current-ratings/bus-ele-an-3002-spd.pdf#page=231)
 - [Supermicro — Example 12 V server PSU](https://store.supermicro.com/us_en/800w-1u-pws-804p-1r.html) and [Texas Instruments — Example 12 V to 1 V regulator](https://www.ti.com/tool/PMP21872)
 
+## Photography and distance examples
+
+The inline visual references use [Wilfredor’s axial compressor photograph](https://commons.wikimedia.org/wiki/File:Axial_compressor_rotor_of_a_gas_turbine,_Deutsches_Museum.jpg) and [Fritzchens Fritz’s AMD EPYC 7702 photograph](https://commons.wikimedia.org/wiki/File:AMD_Epyc_7702_delidded.jpg), both [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). [Oak Ridge National Laboratory’s Frontier photograph](https://commons.wikimedia.org/wiki/File:Frontier_supercomputer_(12).jpg) is [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/). Local copies were re-encoded as WebP. See [travel sources](docs/travel-sources.md) for the transmission photography and documented example.
+
 ## How the project is organized
 
 [Three.js](https://threejs.org/docs/pages/WebGLRenderer) provides the real-time camera, lighting, mesh picking and procedural geometry. [Vite](https://v6.vite.dev/guide/) builds the static app. Native HTML controls, CSS and JavaScript keep the learning content and navigation independent of the renderer. Fonts and icons are bundled locally. The 3D equipment and lighting are original procedural assets. The opening photograph is Charles Devaux’s [Power lines](https://commons.wikimedia.org/wiki/File:Power_lines_(Unsplash).jpg), available under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
@@ -48,9 +52,11 @@ The app’s **Sources** panel lists the component and architecture references. E
 | `src/content.js` | Component explanations, glossary, architectural notes and bibliography |
 | `src/route.js` | Source branches, power states, stop order and model placement |
 | `src/generation-models.js`, `src/infrastructure-models.js` | Equipment model factories and rotors |
-| `src/journey-settings.js`, `src/energy-trace.js`, `src/stage.js` | Contextual environments, energy channels and camera travel |
+| `src/journey-settings.js`, `src/energy-trace.js`, `src/stage.js` | Contextual environments, local energy paths and guided camera |
+| `src/transit.js`, `src/transit.css` | Time-compressed travel sequences and distance examples |
+| `src/guide-steps.js`, `src/conversion-visuals.js` | Narration, local conversion waypoints and mechanism diagrams |
 | `src/parts-generation.js`, `src/parts-downstream.js` | Nested part records, material notes and linked examples |
-| `src/part-explorer.js`, `src/part-models.js`, `src/exploded-scene.js` | Interactive schematic 3D assembly viewer |
+| `src/part-explorer.js`, `src/onsite-assembly.js`, `src/part-models.js` | In-place disassembly and schematic detail for deeper parts |
 | `src/main.js`, `src/style.css` | Tour controls and diagrams |
 
 ## Verify the build
@@ -68,4 +74,4 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-You can use an installed Google Chrome with `CURRENTLINE_BROWSER=chrome npm run test:browser`. The suite traverses all five generation paths and three supply states, exercises the 3D controls and diagram, checks reduced motion and the WebGL fallback, runs axe-core checks, and captures screenshots in the ignored `test-results/` directory.
+You can use an installed Google Chrome with `CURRENTLINE_BROWSER=chrome npm run test:browser`. The suite traverses all five generation routes and three supply states, checks the same-scene expansion and nested parts, exercises travel and reduced motion, verifies the WebGL fallback, and captures screenshots in the ignored `test-results/` directory.
