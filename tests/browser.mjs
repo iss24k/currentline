@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import axe from 'axe-core';
-import { components } from '../src/content.js';
+import { components, sources } from '../src/content.js';
 import { generation, routeFor } from '../src/route.js';
 
 const url = process.env.CURRENTLINE_TEST_URL ?? 'http://127.0.0.1:4173/';
@@ -65,7 +65,7 @@ try {
       await checkActive(id);
     }
     assert.ok(await next.isDisabled());
-    report(`${generation[source].title} to the processor`);
+    report(`${generation[source].title} to the processor and heat removal`);
   }
 
   await page.getByRole('button', { name: 'Currentline home' }).click();
@@ -75,22 +75,33 @@ try {
   await shot('cinematic-generation');
   await page.getByRole('slider', { name: 'Tour position' }).press('ArrowRight');
   await checkActive('gas-turbine');
-  await page.getByRole('button', { name: 'Cutaway' }).click();
-  assert.equal(await page.getByRole('button', { name: 'Cutaway' }).getAttribute('aria-pressed'), 'true');
-  await waitForScene();
-  await shot('cinematic-cutaway');
-  const detailScene = page.locator('canvas');
-  const initialZoom = await detailScene.screenshot();
-  await page.locator('#component-title').focus();
-  await page.keyboard.press('+');
-  assert.equal(initialZoom.equals(await detailScene.screenshot()), false);
-  await page.keyboard.press('0');
-  await page.getByRole('button', { name: 'Details', exact: true }).click();
-  await page.getByText('Explore deeper', { exact: true }).click();
-  assert.ok(await page.getByRole('heading', { name: 'How it’s made' }).isVisible());
+  await page.getByRole('button', { name: 'Focus flow' }).click();
+  assert.equal(await page.getByRole('button', { name: 'Focus flow' }).getAttribute('aria-pressed'), 'true');
+  assert.match(await page.locator('.storage-note').textContent(), /chemical energy/);
+  await shot('focused-turbine-flow');
+  await page.getByRole('button', { name: 'Expand parts' }).click();
+  const explorer = page.locator('dialog.part-explorer');
+  const partRail = explorer.locator('.part-rail');
+  await explorer.locator('canvas').waitFor({ state: 'visible' });
+  await checkAccessibility(page);
+  await shot('exploded-turbine');
+  for (const name of ['Hot-gas turbine stages', 'Rotating turbine blade', 'Airfoil', 'Surface coating system', 'Load-bearing substrate']) {
+    await partRail.getByRole('button', { name: new RegExp(name) }).first().click();
+    await explorer.getByRole('button', { name: 'Expand this part' }).click();
+  }
+  await partRail.getByRole('button', { name: /Gamma-prime precipitates/ }).click();
+  assert.equal(await explorer.locator('#part-name').textContent(), 'Gamma-prime precipitates');
+  await explorer.getByText('Technical references', { exact: true }).click();
+  assert.ok(await explorer.getByRole('link', { name: /NETL/ }).first().isVisible());
+  await shot('blade-microstructure');
   await page.keyboard.press('Escape');
-  assert.ok(await page.locator('#inspector').isHidden());
-  report('keyboard timeline, cutaway, and component details');
+  assert.ok(await explorer.isHidden());
+  assert.equal(await page.locator('#expand-parts').evaluate((button) => button === document.activeElement), true);
+  const stageCanvas = page.locator('#world canvas');
+  const bounds = await stageCanvas.boundingBox();
+  await stageCanvas.dblclick({ position: { x: bounds.width * .68, y: bounds.height * .54 } });
+  assert.equal(await page.getByRole('button', { name: 'Focus flow' }).getAttribute('aria-pressed'), 'false');
+  report('keyboard timeline, glowing flow focus, exploded model and five nested part levels');
 
   await jump('lines');
   await waitForScene();
@@ -110,11 +121,15 @@ try {
     await checkActive(active);
   }
   await diagram.getByRole('button', { name: 'Sources', exact: true }).click();
-  assert.equal(await diagram.locator('.bibliography li').count(), 54);
+  assert.equal(await diagram.locator('.bibliography li').count(), Object.keys(sources).length);
   await page.keyboard.press('Escape');
   await jump('chip');
   await waitForScene();
   await shot('cinematic-processor');
+  await next.click();
+  await checkActive('heat');
+  await waitForScene();
+  await shot('heat-leaves-server');
   report('three power branches, route jumps, focus restoration, bibliography');
 
   await page.getByRole('button', { name: 'Currentline home' }).click();
@@ -137,6 +152,12 @@ try {
   assert.ok(transport.y + transport.height <= 768);
   await jump('lines', animated);
   await waitForScene(animated);
+  const transmissionSite = await animated.locator('#world').getAttribute('data-journey-environment');
+  await animated.getByRole('button', { name: 'Next component' }).click();
+  await animated.locator('#world[data-camera-moving]').waitFor({ state: 'attached' });
+  await waitForScene(animated);
+  const utilitySite = await animated.locator('#world').getAttribute('data-journey-environment');
+  assert.ok(transmissionSite && utilitySite && transmissionSite !== utilitySite);
   const canvas = animated.locator('canvas');
   const before = await canvas.screenshot();
   const { x, y, width, height } = await canvas.boundingBox();
@@ -154,6 +175,9 @@ try {
   await waitForScene(mobile);
   assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   await shot('cinematic-mobile-solar', mobile);
+  await mobile.getByRole('button', { name: 'Expand parts' }).click();
+  await mobile.locator('dialog.part-explorer canvas').waitFor({ state: 'visible' });
+  await shot('mobile-exploded-solar', mobile);
   assert.deepEqual(pageErrors, []);
   report('responsive mobile layout and no browser errors');
 
@@ -170,6 +194,9 @@ try {
   await checkActive('wind', fallback);
   await jump('chip', fallback);
   await checkActive('chip', fallback);
+  await fallback.getByRole('button', { name: 'Expand parts' }).click();
+  await fallback.locator('.parts-without-webgl .part-rail button').first().waitFor({ state: 'visible' });
+  await fallback.getByRole('button', { name: 'Journey', exact: true }).click();
   await fallback.getByRole('button', { name: 'Currentline home' }).click();
   await fallback.clock.install();
   await start('wind', fallback);

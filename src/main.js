@@ -2,6 +2,7 @@ import '@fontsource-variable/instrument-sans';
 import '@fontsource/ibm-plex-mono/latin-400.css';
 import './style.css';
 import { architecture, components, glossary, sources } from './content.js';
+import { energy, formNames } from './energy.js';
 import { generation, grid, modelLabels, modelPhase, modes, phases, routeFor, selectModeFor, server, siteEntry, siteOutput } from './route.js';
 import { icon } from './icons.js';
 
@@ -12,7 +13,7 @@ const e = (value) => String(value).replace(/[&<>"']/g, (char) => ({
 const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 const state = {
   source: 'gas', mode: 'utility', active: 'gas', playing: false, started: false,
-  cutaway: false, reduced: motionPreference.matches,
+  flowFocused: false, reduced: motionPreference.matches,
 };
 const count = (number) => String(number).padStart(2, '0');
 const sourceOptions = Object.entries(generation).map(([id, source]) => `<option value="${id}">${e(source.title)}</option>`).join('');
@@ -53,12 +54,13 @@ app.innerHTML = `
         <p id="view-phase" class="phase-label"></p>
         <h2 id="component-title" tabindex="-1"></h2>
         <p class="summary"></p>
+        <ol class="energy-flow" aria-label="Energy changes in this component"></ol>
+        <p class="storage-note" hidden></p>
         <div class="caption-actions">
-          <button class="text-action" data-action="details" aria-controls="inspector" aria-expanded="false">Details ${icon('arrow-up-right', 13)}</button>
-          <button class="text-action" id="cutaway" data-action="cutaway" aria-pressed="false" hidden>Cutaway</button>
+          <button class="text-action" id="focus-flow" data-action="focus-flow" aria-pressed="false" hidden>Focus flow ${icon('crosshair', 14)}</button>
+          <button class="text-action" id="expand-parts" data-action="expand">Expand parts ${icon('layers', 15)}</button>
         </div>
       </div>
-      <aside class="inspector" id="inspector" aria-labelledby="inspector-title" hidden></aside>
       <div class="transport" role="group" aria-label="Tour playback">
         <div class="transport-buttons">
           <button data-action="prev" class="icon-button" aria-label="Previous component" title="Previous component">${icon('arrow-left', 19)}</button>
@@ -86,10 +88,9 @@ const cover = app.querySelector('.cover');
 const coverSelect = app.querySelector('#cover-source');
 const coverForm = app.querySelector('.cover-actions');
 const viewer = app.querySelector('.viewer');
-const inspector = app.querySelector('.inspector');
 const captionTitle = app.querySelector('#component-title');
-const detailButton = app.querySelector('[data-action="details"]');
-const cutaway = app.querySelector('#cutaway');
+const expandButton = app.querySelector('#expand-parts');
+const flowButton = app.querySelector('#focus-flow');
 const dialog = app.querySelector('#dialog');
 const dialogBody = dialog.querySelector('.dialog-body');
 const worldMessage = app.querySelector('#world-message');
@@ -102,49 +103,14 @@ let stageLoading;
 let playbackTimer;
 let dialogTrigger;
 let dialogKind;
+let partExplorer;
+let explorerLoading;
 
 function links(ids) {
   return ids.map((id) => {
     const source = sources[id];
     return `<a class="source-link" href="${e(source.url)}" target="_blank" rel="noreferrer">${e(source.organization)} · ${e(source.title)} ${icon('arrow-up-right', 13)}</a>`;
   }).join('');
-}
-
-function renderInspector() {
-  const item = components[state.active];
-  inspector.innerHTML = `
-    <div class="inspector-head">
-      <h2 id="inspector-title" tabindex="-1">${e(item.title)}</h2>
-      <button class="icon-button" data-action="details-close" aria-label="Close details">${icon('x', 20)}</button>
-    </div>
-    <dl class="flow">
-      <div><dt>Input</dt><dd>${e(item.input)}</dd></div>
-      <div><dt>Output</dt><dd>${e(item.output)}</dd></div>
-    </dl>
-    <section class="how"><h3>How it works</h3><p>${e(item.works)}</p></section>
-    <details class="deep">
-      <summary>Explore deeper ${icon('chevron-down', 15)}</summary>
-      <div>
-        <h3>Inside the component</h3><p>${e(item.parts)}</p>
-        <h3>How it’s made</h3><p>${e(item.assembly)}</p>
-        <h3>In the chain</h3><p>${e(item.connection)}</p>
-        <h3>A closer look</h3><p>${e(item.deeper)}</p>
-      </div>
-    </details>
-    <div class="inspector-sources"><h3>Component sources</h3>${links(item.sources)}</div>
-  `;
-  inspector.scrollTop = 0;
-}
-
-function showDetails(open, restoreFocus = true) {
-  if (open) {
-    pauseTour();
-    renderInspector();
-  }
-  inspector.hidden = !open;
-  viewer.classList.toggle('details-open', open);
-  detailButton.setAttribute('aria-expanded', String(open));
-  if (restoreFocus) (open ? inspector.querySelector('h2') : detailButton).focus({ preventScroll: true });
 }
 
 function renderTransport() {
@@ -170,25 +136,34 @@ function updateTimeline(index) {
 }
 
 function renderSceneCaption() {
-  const phase = phases.find(({ id }) => id === modelPhase[state.active]);
-  const title = state.mode === 'utility' || phase.id === 'generation' || phase.id === 'grid'
-    ? phase.title : `${phase.title} / ${modes[state.mode].short}`;
-  app.querySelector('#view-phase').textContent = title;
-  captionTitle.textContent = components[state.active].title;
-  app.querySelector('.summary').textContent = components[state.active].summary;
-  cutaway.hidden = !stage?.canCutaway(state.active);
-  cutaway.setAttribute('aria-pressed', String(state.cutaway));
+  const current = energy[state.active];
+  const component = components[state.active];
+  const outage = ['transfer', 'ups'].includes(state.active) && state.mode !== 'utility' ? ` / ${modes[state.mode].short}` : '';
+  app.querySelector('#view-phase').textContent = current.place + outage;
+  captionTitle.textContent = component.title;
+  app.querySelector('.summary').textContent = component.summary;
+  const batteryUps = state.active === 'ups' && state.mode === 'battery';
+  const path = batteryUps ? [
+    { name: 'Battery DC', form: 'dc' }, { name: 'Inverter', form: 'dc' }, { name: '480 V AC', form: 'ac' },
+  ] : current.path;
+  app.querySelector('.energy-flow').innerHTML = path.map(({ name, form }) =>
+    `<li class="form-${form}"><span aria-hidden="true"></span><div><small>${e(formNames[form])}</small><strong>${e(name)}</strong></div></li>`
+  ).join('');
+  flowButton.hidden = !stage?.focusFlow || viewer.classList.contains('without-3d');
+  flowButton.setAttribute('aria-pressed', String(state.flowFocused));
+  const storageNote = app.querySelector('.storage-note');
+  storageNote.hidden = !state.flowFocused;
+  storageNote.textContent = current.storage ?? 'The glow marks the modeled transfer path through this component.';
 }
 
-function setSelection(id, { source = state.source, mode = selectModeFor(id, state.mode), fromTour = false } = {}) {
+function setSelection(id, { source = state.source, mode = selectModeFor(id, state.mode), fromTour = false, travel = 'jump' } = {}) {
   if (!routeFor(source, mode).includes(id)) return;
   if (!fromTour) pauseTour();
   if (id === state.active && source === state.source && mode === state.mode) return;
-  Object.assign(state, { active: id, source, mode, cutaway: false });
+  Object.assign(state, { active: id, source, mode, flowFocused: false });
   renderSceneCaption();
   renderTransport();
-  if (!inspector.hidden) renderInspector();
-  stage?.update(state);
+  stage?.update({ ...state, travel });
   app.querySelector('#announcement').textContent = components[id].title;
 }
 
@@ -199,7 +174,7 @@ function changeMode(mode) {
 function moveStep(direction, fromTour = false) {
   const route = routeFor(state.source, state.mode);
   const nextId = route[route.indexOf(state.active) + direction];
-  if (nextId) setSelection(nextId, { fromTour });
+  if (nextId) setSelection(nextId, { fromTour, travel: 'fly' });
 }
 
 function pauseTour() {
@@ -226,7 +201,6 @@ function toggleTour() {
     pauseTour();
     return;
   }
-  if (!inspector.hidden) showDetails(false, false);
   const route = routeFor(state.source, state.mode);
   if (state.active === route.at(-1)) setSelection(route[0]);
   state.playing = true;
@@ -293,7 +267,9 @@ function renderDiagram() {
 
 function renderGuide() {
   dialogBody.innerHTML = `
-    <p class="dialog-intro">Drag to orbit, scroll to zoom, or use Route to jump to a stop. While exploring, press + or − to zoom and 0 to reset. Double-clicking the scene also resets the view.</p>
+    <p class="dialog-intro">Choose Focus flow to zoom into the highlighted channel. Expand parts opens an interactive assembly. Drag to orbit, scroll or press + or − to zoom, and press 0 to reset.</p>
+    <section><h3>Reading the glowing trace</h3><p>The moving light represents energy transfer. Before generation it can follow fuel, moving water, hot gas, or a spinning shaft. On the AC grid electrons move back and forth locally, and many generators feed the same network. Transmission scenes highlight one conductor to make the three-phase route easier to see. At transformers, the glow changes to blue where a magnetic field transfers energy between windings. The electrical route ends at the processor. The final scene follows the heat it produces.</p>
+    <p>The locations are teaching composites. The equipment layouts and paths are representative. Supplier links point to publicly documented examples of the part type.</p></section>
     <div class="reference-links">
       <label class="motion-setting"><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}> Reduce motion</label>
       <button class="text-action" data-dialog="sources">Sources ${icon('arrow-up-right', 13)}</button>
@@ -344,9 +320,9 @@ function setReduced(value) {
 function showUnavailable() {
   viewer.classList.remove('with-3d');
   viewer.classList.add('without-3d');
-  worldMessage.textContent = 'The scene needs WebGL 2. The route and component notes are available.';
+  worldMessage.textContent = 'The scene needs WebGL 2. The route and parts diagrams are still available.';
   worldMessage.hidden = false;
-  cutaway.hidden = true;
+  flowButton.hidden = true;
 }
 
 function startTour(event) {
@@ -354,7 +330,7 @@ function startTour(event) {
   cover.hidden = true;
   viewer.hidden = false;
   const source = coverSelect.value;
-  Object.assign(state, { source, active: generation[source].stops[0], mode: 'utility', started: true, cutaway: false, playing: !state.reduced });
+  Object.assign(state, { source, active: generation[source].stops[0], mode: 'utility', started: true, flowFocused: false, playing: !state.reduced });
   viewer.toggleAttribute('data-reduced', state.reduced);
   renderSceneCaption();
   renderTransport();
@@ -364,6 +340,10 @@ function startTour(event) {
     stage = createStage({
       mount: app.querySelector('#world'), hotspots: app.querySelector('#hotspots'),
       select: setSelection, onUnavailable: showUnavailable, onInteract: pauseTour,
+      onViewReset() {
+        state.flowFocused = false;
+        renderSceneCaption();
+      },
     });
     worldMessage.hidden = true;
     viewer.classList.add('with-3d');
@@ -382,13 +362,35 @@ function startTour(event) {
 
 function showCover() {
   pauseTour();
-  showDetails(false, false);
   state.started = false;
   stage?.update({ ...state, reduced: true });
   coverSelect.value = state.source;
   viewer.hidden = true;
   cover.hidden = false;
   coverForm.querySelector('button').focus({ preventScroll: true });
+}
+
+async function openParts() {
+  pauseTour();
+  expandButton.disabled = true;
+  try {
+    explorerLoading ??= import('./part-explorer.js');
+    const { createPartExplorer } = await explorerLoading;
+    if (!state.started) return;
+    partExplorer ??= createPartExplorer({
+      onClose() {
+        stage?.update(state);
+        expandButton.focus({ preventScroll: true });
+      },
+    });
+    stage?.update({ ...state, reduced: true });
+    partExplorer.open(state.active, { reduced: state.reduced });
+  } catch (error) {
+    console.warn('Currentline could not load the parts explorer.', error);
+    app.querySelector('#announcement').textContent = 'The parts explorer could not load.';
+  } finally {
+    expandButton.disabled = false;
+  }
 }
 
 coverForm.addEventListener('submit', startTour);
@@ -409,13 +411,15 @@ dialog.addEventListener('click', (event) => {
   if (event.target === dialog) dialog.close();
 });
 viewer.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && !inspector.hidden && !dialog.open) showDetails(false);
   if (!stage || event.ctrlKey || event.metaKey || event.target.matches('input, select, textarea')) return;
   if (event.key === '+' || event.key === '=' || event.key === '-' || event.key === '0') {
     event.preventDefault();
     pauseTour();
-    if (event.key === '0') stage.reset();
-    else stage.zoom(event.key === '-' ? 1.2 : .83);
+    if (event.key === '0') {
+      state.flowFocused = false;
+      stage.reset();
+      renderSceneCaption();
+    } else stage.zoom(event.key === '-' ? 1.2 : .83);
   }
 });
 dialogBody.addEventListener('change', (event) => {
@@ -436,10 +440,7 @@ app.addEventListener('click', (event) => {
   if (go) {
     if (dialogKind === 'diagram') dialog.close();
     setSelection(go, { mode: goMode ?? selectModeFor(go, state.mode) });
-    if ('hotspot' in button.dataset && !button.isConnected && event.detail === 0) {
-      const heading = inspector.hidden ? captionTitle : inspector.querySelector('h2');
-      heading.focus({ preventScroll: true });
-    }
+    if ('hotspot' in button.dataset && !button.isConnected && event.detail === 0) captionTitle.focus({ preventScroll: true });
   }
   if (mode) {
     changeMode(mode);
@@ -451,14 +452,14 @@ app.addEventListener('click', (event) => {
   if (!action) return;
   if (action === 'home') showCover();
   if (action === 'close') dialog.close();
-  if (action === 'details') showDetails(true);
-  if (action === 'details-close') showDetails(false);
   if (action === 'play') toggleTour();
   if (action === 'prev' || action === 'next') moveStep(action === 'prev' ? -1 : 1);
-  if (action === 'cutaway') {
+  if (action === 'focus-flow' && stage?.focusFlow) {
     pauseTour();
-    state.cutaway = !state.cutaway;
-    stage?.update(state);
+    state.flowFocused = !state.flowFocused;
+    if (state.flowFocused) stage.focusFlow();
+    else stage.reset();
     renderSceneCaption();
   }
+  if (action === 'expand') openParts();
 });

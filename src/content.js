@@ -1,4 +1,22 @@
 export const sources = {
+  thermal: {
+    title: "Thermal Management for Intel Xeon Processors",
+    organization: "Intel",
+    url: "https://www.intel.com/content/www/us/en/support/articles/000006710/processors/intel-xeon-processors.html",
+    note: "Processor thermal interfaces, air-cooled heat sinks and liquid-cooling alternatives.",
+  },
+  thermalInterface: {
+    title: "Thermal Interface Material and Processor Cooling",
+    organization: "Intel",
+    url: "https://www.intel.com/content/www/us/en/support/articles/000037209/processors.html",
+    note: "Role of thermal interface material between a heat spreader and its cooler.",
+  },
+  heatRecovery: {
+    title: "Best Practices Guide for Energy-Efficient Data Center Design",
+    organization: "U.S. Department of Energy",
+    url: "https://www.energy.gov/cmei/femp/articles/best-practices-guide-energy-efficient-data-center-design",
+    note: "Server airflow, facility cooling and opportunities for heat recovery.",
+  },
   grid: {
     title: "How electricity is delivered to consumers",
     organization: "U.S. Energy Information Administration",
@@ -697,5 +715,18 @@ export const components = {
     connection: "Board regulators feed the package through its power connections. Neighboring board circuits supply memory, storage and networking hardware through their own branches.",
     deeper: "The selected path ends at the processor core. A chip has several power domains, and a server contains other loads. Most electrical energy used by the server ultimately leaves as heat.",
     sources: ["chip", "chipFabrication", "chipBuild", "vrm"],
+  },
+  heat: {
+    title: "Heat leaves the processor",
+    short: "Heat removal",
+    summary: "Electrical energy warms the chip as it works. In this air-cooled example, a heat sink passes the heat to moving air.",
+    input: "Heat from the processor die",
+    output: "Warmer air leaving the server",
+    works: "Heat conducts through the package, spreader and thermal interface into the heat sink. Fans move air across the fins, carrying heat into the server exhaust.",
+    parts: "Heat spreader, thermal interface material, metal heat sink, fans and a chassis air duct.",
+    assembly: "The heat sink is secured against the processor with an interface material between the contact faces. Fan modules and ducts are installed in the server chassis.",
+    connection: "Heat leaves the die through the package. The exhaust enters the facility's air-management system, which moves heat toward a place where it can be rejected or recovered.",
+    deeper: "Liquid-cooled servers can carry much of this heat away in a coolant loop. The electrical path has reached its load, and the thermal path continues to the surroundings.",
+    sources: ["thermal", "thermalInterface", "heatRecovery"],
   },
 };

@@ -1,10 +1,10 @@
 # Currentline
 
-Currentline is an interactive 3D field guide to electrical energy. Choose natural gas, nuclear, solar, wind, or hydroelectric generation and follow the conversions through the grid, a data center, and a server down to its processor.
+Currentline is an interactive 3D field guide to electrical energy. Choose natural gas, nuclear, solar, wind, or hydroelectric generation and follow the conversions through the grid, a data center, and a server down to its processor and the heat it produces.
 
-Select an energy source and begin the full-screen tour. The timeline and playback controls move between stops. **Route** opens the synchronized diagram and power branches, and **Details** opens the component explanation. Select equipment in the scene or open a cutaway to examine it more closely.
+Select an energy source and begin the full-screen tour. Use **Next** to fly along the energy path. **Focus flow** moves the camera to the active channel or storage point, and **Expand parts** opens a selectable schematic 3D breakdown with materials, functions and documented supplier examples. **Route** opens the diagram and backup branches.
 
-![The full-screen Currentline tour showing an exposed combustion turbine](docs/currentline.webp)
+![The Currentline parts explorer showing the major assemblies of a combustion turbine](docs/currentline.webp)
 
 ## Run locally
 
@@ -17,7 +17,7 @@ npm ci
 npm run dev
 ```
 
-Open the loopback URL printed by Vite, normally `http://127.0.0.1:5173`. The experience runs locally and needs no account, API key, or hosted backend. For the 3D viewer, use a WebGL 2-capable browser. The journey map, inspector, guide and bibliography also work when WebGL 2 is unavailable. **Reduce motion** follows your system preference initially and can be changed under **About** or **Route → Field guide**. Drag to orbit, scroll or press +/− to zoom, and double-click or press 0 to reset.
+Open the loopback URL printed by Vite, normally `http://127.0.0.1:5173`. The experience runs locally and needs no account, API key, or hosted backend. For the 3D viewer, use a WebGL 2-capable browser. The journey map, parts hierarchy, guide and bibliography also work when WebGL 2 is unavailable. **Reduce motion** follows your system preference initially and can be changed under **About** or **Route → Field guide**. Drag to orbit, scroll or press +/− to zoom, and double-click or press 0 to reset.
 
 ## The architecture in the exhibit
 
@@ -28,11 +28,11 @@ Currentline follows one protected IT power path in a representative **U.S. 60 Hz
 - **Generator online:** transfer gear selects generator AC once available. The UPS again converts incoming AC to DC and back to AC.
 - **Downstream:** UPS → floor PDU transformer at 208Y/120 V → busway → rack PDU → 208 V AC server cord → 12 V DC supply → board regulator at about 1 V DC for the example core rail.
 
-The field guide explains AC, DC, voltage, power and energy, plus other facility layouts and DC rack architectures. Equipment geometry, spacing, timing and voltage levels are schematic. The grid combines electricity from multiple sources. Moving lights represent energy transfer, and charge carriers move locally. This project is an educational exhibit. Detailed protection coordination, facility redundancy and cooling are outside its scope.
+The field guide explains AC, DC, voltage, power and energy, plus other facility layouts and DC rack architectures. The outdoor sites, equipment rooms and server interiors are representative teaching environments. Equipment geometry, spacing, timing and voltage levels are schematic. The grid combines electricity from multiple sources. Moving lights represent energy transfer, and charge carriers move locally. This project is an educational exhibit. The final stop follows heat through an example air-cooled server. Facility cooling design, detailed protection coordination and redundancy remain outside the exhibit’s scope.
 
 ## Research
 
-The app’s **Sources** panel lists 54 references, with relevant links on all 27 component cards. The bibliography and supporting notes live in [`src/content.js`](src/content.js). Representative starting points:
+The app’s **Sources** panel lists the component and architecture references. Each part also has technical references and documented supplier examples where available. These examples identify catalog products and part families. The exhibit uses a representative design and has no verified facility-specific bill of materials. Representative starting points:
 
 - [U.S. Energy Information Administration — How electricity is generated](https://www.eia.gov/energyexplained/electricity/how-electricity-is-generated.php) and [how electricity is delivered](https://www.eia.gov/energyexplained/electricity/delivery-to-consumers.php)
 - [U.S. Department of Energy — How gas turbine power plants work](https://www.energy.gov/hgeo/how-gas-turbine-power-plants-work), [nuclear reactor basics](https://www.energy.gov/ne/articles/nuclear-101-how-does-nuclear-reactor-work), [solar PV system design](https://www.energy.gov/cmei/systems/solar-photovoltaic-system-design-basics), [how wind turbines work](https://www.energy.gov/cmei/systems/how-do-wind-turbines-work), and [how hydropower works](https://www.energy.gov/cmei/water/how-hydropower-works)
@@ -47,9 +47,11 @@ The app’s **Sources** panel lists 54 references, with relevant links on all 27
 | --- | --- |
 | `src/content.js` | Component explanations, glossary, architectural notes and bibliography |
 | `src/route.js` | Source branches, power states, stop order and model placement |
-| `src/generation-models.js`, `src/infrastructure-models.js` | Model factories, rotors and cutaways |
-| `src/stage.js` | Camera, scene, energy traces, hotspots and mesh picking |
-| `src/main.js`, `src/style.css` | Controls, component inspector and diagrams |
+| `src/generation-models.js`, `src/infrastructure-models.js` | Equipment model factories and rotors |
+| `src/journey-settings.js`, `src/energy-trace.js`, `src/stage.js` | Contextual environments, energy channels and camera travel |
+| `src/parts-generation.js`, `src/parts-downstream.js` | Nested part records, material notes and linked examples |
+| `src/part-explorer.js`, `src/part-models.js`, `src/exploded-scene.js` | Interactive schematic 3D assembly viewer |
+| `src/main.js`, `src/style.css` | Tour controls and diagrams |
 
 ## Verify the build
 

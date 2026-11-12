@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Box3, Vector3 } from 'three';
 import { architecture, components, glossary, sources } from '../src/content.js';
+import { energy, formNames } from '../src/energy.js';
+import { generationParts } from '../src/parts-generation.js';
+import { downstreamParts } from '../src/parts-downstream.js';
+import { partModel } from '../src/part-models.js';
 import { generationCutaways, generationModels } from '../src/generation-models.js';
 import { infrastructureCutaways, infrastructureModels } from '../src/infrastructure-models.js';
 import { generation, grid, modes, phases, routeFor, selectModeFor, server, siteOutput } from '../src/route.js';
@@ -12,7 +16,8 @@ test('all 15 source and supply combinations form complete, unique routes', () =>
       const route = routeFor(source, mode);
       assert.deepEqual(route, [...stops, ...grid, ...branch, ...siteOutput, ...server]);
       assert.equal(route.length, new Set(route).size);
-      assert.equal(route.at(-1), 'chip');
+      assert.equal(route.at(-2), 'chip');
+      assert.equal(route.at(-1), 'heat');
       for (const id of route) assert.ok(components[id], id);
     }
   }
@@ -45,7 +50,7 @@ test('every component and glossary citation resolves to a public bibliography en
 test('all model factories and cutaways produce bounded 3D geometry', () => {
   const factories = { ...generationModels, ...infrastructureModels };
   const cutaways = new Set([...generationCutaways, ...infrastructureCutaways]);
-  assert.deepEqual(Object.keys(factories).sort(), Object.keys(components).sort());
+  assert.deepEqual(Object.keys(factories).sort(), Object.keys(components).filter((id) => id !== 'heat').sort());
   assert.equal(Object.keys(factories).length, 27);
   assert.equal(cutaways.size, 21);
   for (const [id, factory] of Object.entries(factories)) {
@@ -60,4 +65,33 @@ test('all model factories and cutaways produce bounded 3D geometry', () => {
       assert.ok(meshes >= 10, id);
     }
   }
+});
+
+test('every stop has a labeled energy path and a researched parts hierarchy', () => {
+  const parts = { ...generationParts, ...downstreamParts };
+  const keys = Object.keys(components).sort();
+  assert.deepEqual(Object.keys(energy).sort(), keys);
+  assert.deepEqual(Object.keys(parts).sort(), keys);
+  function verifyPart(part) {
+    for (const field of ['name', 'shape', 'job', 'material']) assert.ok(part[field], field);
+    for (const source of [...(part.refs ?? []), ...(part.vendors ?? [])]) {
+      assert.equal(new URL(source.url).protocol, 'https:', part.name);
+      assert.ok(source.title || (source.name && source.note), part.name);
+    }
+    return 1 + Math.max(0, ...(part.children ?? []).map(verifyPart));
+  }
+  for (const [id, root] of Object.entries(parts)) {
+    const minimumDepth = id === 'gas-turbine' || id === 'chip' ? 7 : 3;
+    assert.ok(verifyPart(root) >= minimumDepth, id);
+    assert.ok(energy[id].path.every(({ name, form }) => name && formNames[form]), id);
+    for (const child of root.children) {
+      const model = partModel(child);
+      const size = new Box3().setFromObject(model).getSize(new Vector3());
+      assert.ok(size.toArray().every((value) => Number.isFinite(value) && value > 0), child.name);
+      model.traverse((part) => part.geometry?.dispose());
+    }
+  }
+  assert.ok(parts['gas-turbine'].children.some(({ name }) => name.includes('compressor')));
+  assert.ok(energy.battery.storage && energy.hydro.storage);
+  assert.ok(energy.heat.path.every(({ form }) => form === 'thermal'));
 });

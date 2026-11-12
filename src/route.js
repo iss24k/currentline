@@ -16,7 +16,7 @@ export const generation = {
 export const grid = ['step-up', 'lines', 'substation'];
 export const siteEntry = ['intake', 'site-transformer'];
 export const siteOutput = ['ups', 'floor-pdu', 'busway'];
-export const server = ['rack-pdu', 'cord', 'psu', 'vrm', 'chip'];
+export const server = ['rack-pdu', 'cord', 'psu', 'vrm', 'chip', 'heat'];
 
 export const modes = {
   utility: {
@@ -42,7 +42,7 @@ export const positions = {
   generator: [64, -8.1], battery: [73, -7.6], ups: [81, 0.4],
   'floor-pdu': [89, 0.4], busway: [97, 0.4],
   'rack-pdu': [114, 0.4], cord: [122, -0.4], psu: [130, 0.4],
-  vrm: [138, -0.4], chip: [146, 0.4],
+  vrm: [138, -0.4], chip: [146, 0.4], heat: [154, 0.4],
 };
 
 export const modelLabels = {
@@ -53,7 +53,7 @@ export const modelLabels = {
   intake: 'MV intake', 'site-transformer': 'Site transformer', transfer: 'Transfer switchgear',
   generator: 'Standby generator', battery: 'Battery bank', ups: 'Online UPS',
   'floor-pdu': 'Floor PDU', busway: 'Busway', 'rack-pdu': 'Rack PDU', cord: 'Power cord',
-  psu: 'Server PSU', vrm: 'Voltage regulator', chip: 'Processor',
+  psu: 'Server PSU', vrm: 'Voltage regulator', chip: 'Processor', heat: 'Heat removal',
 };
 
 const facility = [...siteEntry, 'generator', 'transfer', 'battery', ...siteOutput];
