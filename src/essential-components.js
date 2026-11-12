@@ -1,0 +1,206 @@
+const interconnection = "https://cdn.orsted.com/-/media/www/docs/corp/eleven-mile-transmission/eleven-mile-solar-transmission-application.pdf?hash=16EB675CC7D7A1992430800F226B6C03&rev=426312b16026475886b1e658abe92ede";
+const solarOpening = "https://media.srpnet.com/rsted-and-srp-celebrate-commencement-of-largest-co-located-solar-and-battery-storage-project-on-salt-river-project-power-grid/";
+const distribution = "https://www.energy.gov/sites/default/files/2024-07/best-practice-guide-data-center-design.pdf";
+const distributionExample = "https://www.eaton.com/content/dam/eaton/products/design-guides---consultant-audience/canada/cag/eaton-power-distribution-systems-consulting-application-guide-tb08104003e-tab-1-ca08104001e-ca.pdf";
+const onlineUps = "https://www.eaton.com/content/dam/eaton/products/backup-power-ups-surge-it-power-distribution/backup-power-ups/eaton-93pm-ups/manuals/eaton-93pm-150-cap-4w-ups-P-164000515.pdf";
+const boardSupply = "https://www.ti.com/tool/PMP21872";
+
+export const essentials = [
+  {
+    id: "solar",
+    title: "Solar panel",
+    short: "Light → DC",
+    description: "A thin layer inside the panel absorbs sunlight and makes electric current that flows in one direction.",
+    input: "Sunlight",
+    output: "DC to the solar inverter",
+    diagram: "solar",
+    model: "solar",
+    parts: [
+      { name: "Front glass", target: "Front glass", role: "Lets sunlight in and protects the active layers from the weather." },
+      { name: "Light-absorbing film", target: "CdTe film", role: "The factory deposits cadmium telluride onto coated glass and uses lasers to pattern it into cell strips." },
+      { name: "Conductive layers", target: "Conductive cell strips", role: "Collect electric charge. A transparent layer on the light-facing side lets light through." },
+      { name: "Junction box and leads", target: "DC junction box", role: "Bring the panel’s direct current out to the array cables." },
+    ],
+    sources: [
+      { label: "SRP · Eleven Mile equipment suppliers", url: solarOpening },
+      { label: "U.S. Department of Energy · cadmium telluride cells and manufacturing", url: "https://www.energy.gov/cmei/systems/cadmium-telluride" },
+    ],
+    example: {
+      title: "First Solar Series 6 Plus",
+      note: "SRP identifies First Solar as a panel supplier. This published model illustrates the technology. The installed model is unconfirmed here.",
+      url: "https://www.firstsolar.com/Products/Series-6",
+    },
+  },
+  {
+    id: "inverter",
+    title: "Solar inverter",
+    short: "DC → AC",
+    description: "Fast electronic switches and a filter turn the panels’ direct current into the alternating current the grid uses.",
+    input: "DC from the solar panels",
+    output: "AC to a collection transformer",
+    diagram: "inverter",
+    model: "solar-inverter",
+    parts: [
+      { name: "DC terminals", target: "DC input and protection", role: "Connect the panel array cables to the conversion circuit." },
+      { name: "Electronic switches", target: "Inverter bridge", role: "Switch rapidly in a pattern that creates alternating voltage." },
+      { name: "Output filter", target: "AC output filter", role: "Coils and capacitors smooth the switching pulses into a wave." },
+      { name: "Controller", target: "Controller board", role: "Times the switches and matches the output to the grid." },
+    ],
+    sources: [
+      { label: "U.S. Department of Energy · how inverters make AC", url: "https://www.energy.gov/cmei/systems/solar-integration-inverters-and-grid-services-basics" },
+    ],
+    example: {
+      title: "SMA Sunny Central UP",
+      note: "A public example of a central inverter designed for utility-scale solar plants.",
+      url: "https://www.sma-america.com/products/solarinverters/sunny-central-up",
+    },
+  },
+  {
+    id: "transformer",
+    title: "Grid transformer",
+    short: "AC → higher-voltage AC",
+    description: "Two coils transfer energy through a changing magnetic field, raising the voltage so the grid can move the same power with less current.",
+    input: "34.5 kV AC from the solar site’s collection network",
+    output: "230 kV AC to Pinal Central Substation",
+    diagram: "transformer",
+    model: "step-up",
+    parts: [
+      { name: "Input coil", target: "Lower-voltage winding", role: "AC in this winding creates a changing magnetic field." },
+      { name: "Steel core", target: "Magnetic core", role: "Thin stacked steel sheets guide the field through both coils." },
+      { name: "Output coil", target: "Higher-voltage winding", role: "More turns on this winding produce a higher voltage." },
+      { name: "Insulated terminals", target: "High-voltage bushing", role: "Connect the coils to the cables while keeping live metal separate from the tank." },
+    ],
+    sources: [
+      { label: "Ørsted · Eleven Mile interconnection filing", url: interconnection },
+      { label: "U.S. Energy Information Administration · transformers and the grid", url: "https://www.eia.gov/energyexplained/electricity/delivery-to-consumers.php" },
+    ],
+    example: {
+      title: "Hitachi Energy core-type transformer",
+      note: "A public example showing copper windings around a layered electrical-steel core.",
+      url: "https://www.hitachienergy.com/ca/en/products-and-solutions/transformers/power-transformers/generator-step-up-transformers-gsu/core-type-transformers",
+    },
+  },
+  {
+    id: "intake",
+    title: "Data center intake",
+    short: "Utility AC → building AC",
+    description: "The incoming utility feed goes through protective switches and a transformer lowers its voltage for the building’s equipment.",
+    input: "Medium-voltage AC from the utility",
+    output: "480 V AC to the UPS in this example",
+    diagram: "intake",
+    model: "intake",
+    parts: [
+      { name: "Breaker", target: "Withdrawable vacuum circuit breaker", role: "Disconnects the feed when the protection system detects a fault." },
+      { name: "Busbars", target: "Phase busbars", role: "Rigid metal bars carry electricity between pieces of switchgear." },
+      { name: "Cable termination", target: "Cable termination", role: "Joins an insulated incoming cable to the equipment while keeping live metal safely separated." },
+      { name: "Protection relay", target: "Feeder protection relay", role: "Monitors the feed and commands the breaker to open if it detects a fault." },
+    ],
+    sources: [
+      { label: "U.S. Department of Energy · data center power distribution", url: distribution },
+      { label: "Eaton · how transfer switches work", url: "https://www.eaton.com/sg/en-us/products/low-voltage-power-distribution-control-systems/automatic-transfer-switches/automatic-transfer-switch-fundamentals.html" },
+    ],
+    example: {
+      title: "Schneider Electric SureSeT",
+      note: "A published example of metal-clad switchgear with a removable vacuum breaker.",
+      url: "https://www.se.com/us/en/download/document/6055CT2201/",
+    },
+  },
+  {
+    id: "ups",
+    title: "Battery backup",
+    short: "AC → DC → AC",
+    description: "An uninterruptible power supply (UPS) makes a steady AC supply and draws on batteries if the incoming feed fails.",
+    input: "Utility or generator AC, or battery DC during an outage",
+    output: "Steady 480 V AC to distribution in this example",
+    diagram: "ups",
+    model: "ups",
+    parts: [
+      { name: "Rectifier", target: "Input rectifier", role: "Converts incoming AC to DC for the UPS’s internal circuit." },
+      { name: "Battery bank", model: "battery", target: "Battery module", role: "Stores energy chemically and feeds DC to the UPS while the generator starts." },
+      { name: "Inverter", target: "Inverter and output filter", role: "Rebuilds AC from DC whether the DC comes from the rectifier or the batteries." },
+      { name: "DC link", target: "DC link", role: "Capacitors steady the common DC connection feeding the inverter." },
+    ],
+    sources: [
+      { label: "Eaton · diagrams for normal and battery operation", url: onlineUps },
+      { label: "U.S. Department of Energy · how batteries store energy", url: "https://www.energy.gov/science/doe-explainsbatteries" },
+    ],
+    example: {
+      title: "Eaton 93PM 480 V UPS",
+      note: "The manual diagrams the two conversions in normal mode and the shorter path in battery mode.",
+      url: onlineUps,
+    },
+  },
+  {
+    id: "server",
+    title: "Server power supply",
+    short: "AC → 12 V DC",
+    description: "A power supply inside the server turns AC from the rack outlet into steady low-voltage DC for the motherboard.",
+    input: "208 V AC from a rack outlet in this example",
+    output: "12 V DC to the motherboard in this example",
+    diagram: "server",
+    model: "psu",
+    parts: [
+      { name: "AC inlet and filter", target: "AC inlet and interference filter", role: "Receives AC from the rack cord and limits electrical interference." },
+      { name: "AC-to-DC circuit", target: "Power factor correction stage", role: "Converts the incoming AC into an intermediate DC supply." },
+      { name: "Isolated conversion stage", target: "Isolated resonant converter", role: "Uses fast switches and a small transformer to lower the voltage and separate the two circuits electrically." },
+      { name: "Output connector", target: "Secondary rectifier and DC output", role: "Delivers DC through metal contacts to the server board or a power backplane." },
+    ],
+    sources: [
+      { label: "Eaton · distribution from a 480 V UPS to 208 V equipment", url: distributionExample },
+      { label: "Eaton · rack distribution unit with 208 V outlets", url: "https://www.eaton.com/us/en-us/skuPage.PDU3MV6L2130.html" },
+      { label: "Texas Instruments · example 12 V server power supply circuit", url: "https://www.ti.com/tool/TIDA-010062" },
+    ],
+    example: {
+      title: "Supermicro PWS-804P-1R",
+      note: "This published server supply accepts 208 V AC and provides a main 12 V DC output.",
+      url: "https://store.supermicro.com/us_en/800w-1u-pws-804p-1r.html",
+    },
+  },
+  {
+    id: "regulator",
+    title: "Board voltage regulator",
+    short: "12 V DC → about 1 V DC",
+    description: "A small circuit near the processor lowers the voltage and keeps it steady as the chip’s demand changes.",
+    input: "12 V DC from the server supply in this example",
+    output: "About 1 V DC for the chip core in this example",
+    diagram: "regulator",
+    model: "vrm",
+    parts: [
+      { name: "Controller chip", target: "Feedback and phase controller", role: "Measures the output and adjusts the switching to hold the target voltage." },
+      { name: "Power switches", target: "Integrated power stage", role: "Turn the input on and off rapidly in controlled pulses." },
+      { name: "Inductor", target: "Phase inductor", role: "A coil briefly stores energy in a magnetic field and smooths the current." },
+      { name: "Capacitors", target: "Output capacitor bank", role: "Briefly hold charge to keep the voltage steady as the processor’s demand changes." },
+    ],
+    sources: [
+      { label: "Infineon · a server processor core power controller", url: "https://www.infineon.com/assets/row/public/documents/24/49/infineon-xdpe1b284b-0000-datasheet-en.pdf" },
+      { label: "Texas Instruments · reference board supplier and parts list", url: "https://www.ti.com/lit/pdf/TIDM177" },
+    ],
+    example: {
+      title: "Texas Instruments PMP21872",
+      note: "This 12 V to 1 V reference board uses TI switches, Cyntec coils and ceramic capacitors from Murata, TDK and KEMET.",
+      url: boardSupply,
+    },
+  },
+  {
+    id: "chip",
+    title: "Processor",
+    short: "DC → computation + heat",
+    description: "Tiny switches on the chip perform calculations, and most of the electrical energy they use becomes heat that has to leave the chip.",
+    input: "Low-voltage DC from the board regulator",
+    output: "Data signals and heat",
+    diagram: "chip",
+    model: "chip",
+    parts: [
+      { name: "Package and contacts", target: "Package substrate", role: "Protect the silicon and connect it to power and data lines on the board." },
+      { name: "Silicon die", target: "Processor die", role: "A small piece of patterned silicon holds the circuits that do the work." },
+      { name: "Transistors", target: "Logic cell", role: "Microscopic switches turn on and off to process information." },
+      { name: "Heat spreader", target: "Integrated heat spreader", role: "Carries heat away from the silicon toward the cooler." },
+    ],
+    sources: [
+      { label: "Intel · what is inside a chip package", url: "https://www.intel.com/content/www/us/en/newsroom/tech101/manufacturing/how-silicon-die-become-chip-packages.html" },
+      { label: "Intel · how transistors work", url: "https://www.intel.com/content/www/us/en/newsroom/tech101/the-transistor-explained.html" },
+      { label: "Intel · how heat leaves a server processor", url: "https://www.intel.com/content/www/us/en/support/articles/000007816/processors.html" },
+      { label: "U.S. Department of Energy · heat from data center equipment", url: distribution },
+    ],
+  },
+];

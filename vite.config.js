@@ -1,10 +1,14 @@
 import { defineConfig } from 'vite';
+import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   build: {
-    // The optional Three.js renderer is a single 513 kB chunk (131 kB gzip).
     chunkSizeWarningLimit: 550,
     rollupOptions: {
+      input: {
+        atlas: fileURLToPath(new URL('./index.html', import.meta.url)),
+        fieldGuide: fileURLToPath(new URL('./field-guide.html', import.meta.url)),
+      },
       output: {
         manualChunks: { three: ['three'] },
       },
