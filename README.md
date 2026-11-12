@@ -1,6 +1,6 @@
 # Currentline
 
-Currentline is a scroll-led journey from **Eleven Mile Solar Center** in Pinal County, Arizona, to **Meta’s Mesa Data Center** and the processor inside a representative server. Scroll to fly between real aerial locations. Drag the view to look around. Open **How it works** at an equipment stop to see a wiring diagram and separate the parts in the same scene.
+Currentline is a scroll-led journey from **Eleven Mile Solar Center** in Pinal County, Arizona, to **Meta’s Mesa Data Center** and the processor inside a representative server. Scroll to fly between real aerial locations and follow the illustrated power path through connected equipment. Drag the view to look around. Open **How it works** to separate the parts in place and see each part’s position in the circuit.
 
 ![Currentline’s aerial opening above central Arizona](docs/currentline.webp)
 
@@ -27,6 +27,12 @@ SRP, Ørsted and Meta documented the relationship between the Eleven Mile projec
 - **Shared grid.** The dotted line follows the camera between the sites, which are about 54 km apart in a straight line. Electrical power mixes across the interconnected network and flows along many available paths. Glowing beads in equipment models visualize energy transfer. [EIA electricity delivery overview](https://www.eia.gov/energyexplained/electricity/delivery-to-consumers.php)
 - **Mesa.** SRP’s Project Huckleberry connects the regional grid to the Prickly Pear substation serving the campus with a half-mile 230 kV line. The exterior is real, and the equipment scenes use a representative design. [SRP Project Huckleberry](https://www.srpnet.com/grid-water-management/grid-management/improvement-projects/project-huckleberry)
 
+## Connected equipment
+
+The 3D tour starts with a detailed thin-film panel row and follows DC to a central inverter. A separate pad transformer sends 34.5 kV AC through the collection circuit to the main 230 kV transformer. The representative 3D stages shorten physical distances so cables and handoffs stay visible. The moving light illustrates energy transfer. A dashed cyan trace represents the magnetic field between electrically isolated transformer windings.
+
+The original solar equipment models reference First Solar’s Series 6 mechanical drawings, SMA’s Sunny Central enclosure and terminal layout, and Hitachi Energy’s description of core-type transformer windings. The site’s installed equipment models are unverified. [First Solar user guide](https://www.firstsolar.com/-/media/First-Solar/Technical-Documents/User-Guides/Series-6-User-Guide.pdf) · [SMA product data](https://files.sma.de/downloads/SCXXXXUP-US-DS-en-27.pdf) · [Hitachi Energy core-type transformers](https://www.hitachienergy.com/ca/en/products-and-solutions/transformers/power-transformers/generator-step-up-transformers-gsu/core-type-transformers)
+
 ## Representative interior
 
 A typical U.S. AC path provides the teaching example. Facility layouts, backup schemes, voltages and hardware vary.
@@ -47,7 +53,9 @@ A typical U.S. AC path provides the teaching example. Facility layouts, backup s
 | `src/atlas-data.js`, `public/atlas/` | Georeferenced photographs, relief, documented points |
 | `src/atlas-camera.js`, `src/atlas-render.js` | Camera choreography, bounded pan and 2D fallback |
 | `src/essential-components.js`, `src/atlas-diagrams.js` | Component records and visual power diagrams |
-| `src/equipment-camera.js`, `src/equipment-flow.js` | Equipment lighting, disassembly, part highlights and energy overlay |
+| `src/equipment-camera.js`, `src/equipment-scene.js` | Connected equipment scene, camera, and handoff cables |
+| `src/equipment-flow.js`, `src/journey-power.js` | Illustrated energy paths and explanations of each conversion |
+| `src/solar-equipment.js` | Detailed original panel, inverter and transformer geometry |
 | `src/generation-models.js`, `src/infrastructure-models.js` | Original procedural equipment models |
 | `src/field-guide.js`, `src/parts-*.js` | Five-source field guide and deeper parts records |
 
@@ -69,4 +77,4 @@ npm run test:browser
 npm run test:field-guide
 ```
 
-Set `CURRENTLINE_BROWSER=chrome` to use an installed Google Chrome. The atlas suite verifies the aerial textures, 4K rendering, scrolling, map pan, accessible controls, the inline diagrams and 36 component selections. The field guide suite covers the five generation routes and backup power. Screenshots go to the ignored `test-results/` directory.
+Set `CURRENTLINE_BROWSER=chrome` to use an installed Google Chrome. The atlas suite verifies the aerial textures, 4K rendering, scrolling, map pan, accessible controls, the inline diagrams and 37 component selections and reversible equipment handoffs. The field guide suite covers the five generation routes and backup power. Screenshots go to the ignored `test-results/` directory.

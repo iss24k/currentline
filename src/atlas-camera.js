@@ -83,6 +83,8 @@ export function createAtlasCamera(host, { onReady, onProgress } = {}) {
   let progress = 0;
   let displayed = 0;
   let velocity = 0;
+  let approach = 0;
+  let displayedApproach = 0;
   let reported;
   let panAt = 0;
   let reduced = false;
@@ -146,7 +148,14 @@ export function createAtlasCamera(host, { onReady, onProgress } = {}) {
         velocity = (velocity - spring * impulse) * decay;
       }
     }
+    const approachGap = approach - displayedApproach;
+    const approaching = Math.abs(approachGap) > .001 && !reduced;
+    displayedApproach = approaching ? displayedApproach + approachGap * (1 - Math.exp(-delta / 52)) : approach;
     state = flight(displayed, reduced);
+    if (displayedApproach) {
+      state.span *= 1 - .34 * displayedApproach;
+      state.tilt *= 1 - .26 * displayedApproach;
+    }
     const moving = pan.distanceToSquared(target) > .000001;
     if (!moving || reduced) pan.copy(target);
     else pan.lerp(target, 1 - Math.exp(-delta / (gesture ? 24 : 128)));
@@ -172,8 +181,8 @@ export function createAtlasCamera(host, { onReady, onProgress } = {}) {
       reported = state.progress;
       onProgress?.(reported);
     }
-    host.toggleAttribute('data-atlas-moving', Boolean((moving || advancing) && !reduced));
-    if ((moving || advancing) && !reduced) schedule();
+    host.toggleAttribute('data-atlas-moving', Boolean((moving || advancing || approaching) && !reduced));
+    if ((moving || advancing || approaching) && !reduced) schedule();
   }
 
   const resize = new ResizeObserver(([entry]) => {
@@ -255,14 +264,23 @@ export function createAtlasCamera(host, { onReady, onProgress } = {}) {
   return {
     attribution: atlas.credits,
     get progress() { return state.progress; },
+    projectSite(name) {
+      const location = atlas.sites[name] ?? atlas.features?.[name];
+      if (!location || !width || !height) return null;
+      const point = terrain.project(projection.point(location.coords));
+      return { x: point.x / width, y: point.y / height, visible: point.visible };
+    },
     render(value, options = {}) {
       const next = Number.isFinite(value) ? MathUtils.clamp(value, 0, 1) : 0;
       const quiet = Boolean(options.reduced);
-      const changed = next !== progress || quiet !== reduced;
+      const nextApproach = quiet ? 0 : MathUtils.clamp(options.approach ?? 0, 0, 1);
+      const changed = next !== progress || quiet !== reduced || nextApproach !== approach;
       progress = next;
       reduced = quiet;
+      approach = nextApproach;
       if (reduced || options.immediate || Math.abs(progress - displayed) > .56) {
         displayed = progress;
+        displayedApproach = approach;
         velocity = 0;
       }
       if (!gesture?.active && Math.abs(progress - panAt) > .012 && target.lengthSq()) resetView();

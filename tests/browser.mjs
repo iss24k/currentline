@@ -42,6 +42,14 @@ async function at(page, id, relative = 0) {
   }, { id, relative });
   await selected(page, id);
 }
+async function atProgress(page, id, progress) {
+  await page.evaluate(({ id, progress }) => {
+    const section = document.getElementById(id);
+    const threshold = document.querySelector('.film-stage').offsetHeight * .29;
+    window.scrollTo(0, section.offsetTop + section.offsetHeight * progress - threshold);
+  }, { id, progress });
+  await selected(page, id);
+}
 async function checkAccessibility(page) {
   await page.evaluate(axe.source);
   const result = await page.evaluate(() => window.axe.run({ runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }));
@@ -88,6 +96,51 @@ try {
   await shot(page, 'atlas-eleven-mile');
   report('Drag moves the map while wheel scrolling advances the story');
 
+  const stage = page.locator('.film-stage');
+  await at(page, 'eleven-mile', .53);
+  await page.locator('.film-handoff').waitFor({ state: 'visible' });
+  await stage.locator('#equipment-viewport[data-ready=true]').waitFor();
+  const layerMix = await stage.evaluate((element) => Number(element.style.getPropertyValue('--equipment-opacity')));
+  assert.ok(layerMix > 0 && layerMix < 1);
+  await page.screenshot({ path: new URL('route-field-to-panel.png', output).pathname });
+
+  await at(page, 'solar', .48);
+  await stage.locator('.power-focus').waitFor();
+  await page.locator('.film-stage[data-journey-phase=handoff]').waitFor();
+  const equipmentCanvas = await page.locator('#equipment-viewport canvas').elementHandle();
+  await shot(page, 'route-panel-to-inverter');
+  await at(page, 'inverter');
+  assert.ok(await equipmentCanvas.evaluate((node) => node === document.querySelector('#equipment-viewport canvas')));
+  await at(page, 'solar', .48);
+  assert.equal(await stage.getAttribute('data-journey-phase'), 'handoff');
+  report('Aerial match cut and reversible panel-to-inverter handoff stay in one equipment viewport');
+
+  for (const [id, progress, bridge] of [
+    ['inverter', .83, 'solar-inverter>step-up'],
+    ['ups', .83, 'ups>floor-pdu'],
+    ['server', .83, 'psu>vrm'],
+    ['regulator', .83, 'vrm>chip'],
+  ]) {
+    await atProgress(page, id, progress);
+    await stage.locator(`#equipment-viewport[data-power-bridge="${bridge}"]`).waitFor();
+  }
+  for (const [id, progress, equipment] of [
+    ['intake', .636, 'site-transformer'],
+    ['intake', .854, 'transfer'],
+    ['distribution', .594, 'busway'],
+    ['distribution', .74, 'rack-pdu'],
+    ['distribution', .891, 'cord'],
+  ]) {
+    await atProgress(page, id, progress);
+    await stage.locator(`#equipment-viewport[data-power-scene="${equipment}"]`).waitFor();
+  }
+  for (const id of ['transformer', 'mesa']) {
+    await atProgress(page, id, .86);
+    await page.locator('.film-handoff').waitFor({ state: 'visible' });
+  }
+  report('Every equipment transition follows the route, including the building transformer, transfer switch, busway and rack cord');
+
+  let selectableParts = 0;
   for (const id of ids.slice(2)) {
     await at(page, id);
     const section = page.locator(`#${id}`);
@@ -99,7 +152,8 @@ try {
     assert.ok(await details.evaluate((element) => element.open));
     assert.ok(await details.locator('.diagram-node').count() >= 3);
     const pieces = details.locator('.part-button');
-    assert.equal(await pieces.count(), 4);
+    assert.equal(await pieces.count(), id === 'inverter' ? 5 : 4);
+    selectableParts += await pieces.count();
     for (const button of await pieces.all()) {
       await button.click();
       assert.equal(await button.getAttribute('aria-pressed'), 'true');
@@ -110,13 +164,13 @@ try {
         return marker && marker.textContent === name && !marker.hidden;
       }, await button.textContent());
     }
-    if (['solar', 'server', 'chip'].includes(id)) await shot(page, `atlas-${id}-parts`);
+    if (['solar', 'inverter', 'transformer', 'server', 'chip'].includes(id)) await shot(page, `atlas-${id}-parts`);
     await details.locator('summary').click();
     assert.equal(await details.evaluate((element) => element.open), false);
   }
-  report('Nine component scenes open inline, synchronize diagrams and highlight all 36 selectable parts');
+  report(`Nine component scenes open inline, synchronize diagrams and highlight all ${selectableParts} selectable parts`);
 
-  await at(page, 'grid', .17);
+  await at(page, 'grid', .10);
   await page.getByText('Solar grid connection · route from public plans', { exact: true }).waitFor();
   await page.locator('.atlas-place').filter({ hasText: 'Pinal Central Substation' }).waitFor();
   await shot(page, 'atlas-local-connection');
@@ -149,6 +203,10 @@ try {
   await shot(mobile, 'atlas-mobile-grid');
   await at(mobile, 'mesa');
   await shot(mobile, 'atlas-mobile-mesa');
+  await atProgress(mobile, 'solar', .86);
+  assert.equal(await mobile.locator('.film-stage').getAttribute('data-journey-phase'), 'component');
+  await at(mobile, 'solar');
+  await shot(mobile, 'route-mobile-solar');
   await at(mobile, 'server');
   await mobile.locator('#server .component-details summary').click();
   await mobile.locator('#server .part-button').first().click();
@@ -160,6 +218,23 @@ try {
   await shot(mobile, 'atlas-mobile-inspection');
   await checkAccessibility(mobile);
   report('Mobile layout, reduced-motion stops, inline detail and accessibility');
+
+  const compact = await pageWith({ viewport: { width: 860, height: 906 }, reducedMotion: 'reduce' });
+  await compact.goto(url);
+  await at(compact, 'inverter');
+  await compact.locator('#equipment-viewport[data-ready=true] canvas').waitFor();
+  const compactModel = await compact.locator('#equipment-viewport').boundingBox();
+  const compactTitle = await compact.locator('#title-inverter').boundingBox();
+  assert.ok(compactModel.y + compactModel.height < compactTitle.y);
+  await compact.locator('#inverter summary').click();
+  await compact.getByRole('button', { name: 'Collection transformer', exact: true }).click();
+  const compactMarker = compact.locator('.equipment-marker:not([hidden])');
+  await compactMarker.waitFor();
+  const marker = await compactMarker.boundingBox();
+  assert.ok(marker.x >= 0 && marker.x + marker.width <= 860);
+  await shot(compact, 'route-collection-transformer');
+  await compact.close();
+  report('Compact desktop preview keeps the model, controls and selected part label readable');
 
   const fallback = await pageWith({ reducedMotion: 'reduce' });
   await fallback.addInitScript(() => {

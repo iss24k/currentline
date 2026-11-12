@@ -4,6 +4,7 @@ import './atlas.css';
 import { atlas as geography } from './atlas-data.js';
 import { essentials } from './essential-components.js';
 import { diagramMarkup, highlightDiagram } from './atlas-diagrams.js';
+import { easeBetween, formNames, powerNotes, powerRoutes, sceneJoins, transitionNotes } from './journey-power.js';
 
 const components = Object.fromEntries(essentials.map((component) => [component.id, component]));
 const journal = {
@@ -57,6 +58,7 @@ const chapters = [
 
 const icon = {
   down: '<path d="M12 5v14m-5-5 5 5 5-5"/>',
+  right: '<path d="M5 12h14m-5-5 5 5-5 5"/>',
   up: '<path d="M12 19V5m-5 5 5-5 5 5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   link: '<path d="M7 17 17 7M7 7h10v10"/>',
@@ -74,9 +76,12 @@ function componentDetails(chapter) {
   return `<details class="component-details">
     <summary>${glyph('plus')} How it works</summary>
     <div class="component-body">
-      ${diagramMarkup(chapter.id)}
       <div class="part-list" aria-label="Parts of ${escape(chapter.title)}">${partList}</div>
-      <p class="part-role" aria-live="polite"></p>
+      <div class="part-explanation" aria-live="polite">
+        <strong class="part-context">Select a part to see where it fits.</strong>
+        <p class="part-role"></p>
+      </div>
+      ${diagramMarkup(chapter.id)}
       ${chapter.example ? `<p class="equipment-example">${external(chapter.example.title, chapter.example.url)}<small>${escape(chapter.example.note)}</small></p>` : ''}
       <div class="source-links">${chapter.sources.map(({ label, url }) => external(label, url)).join('')}</div>
     </div>
@@ -96,7 +101,7 @@ function chapterMarkup(chapter, index) {
       <p class="eyebrow">${escape(chapter.place)}</p>
       <${heading} id="title-${chapter.id}" tabindex="-1">${escape(chapter.title).replace('\n', '<br>')}</${heading}>
       <p class="chapter-description">${escape(chapter.description)}</p>
-      ${chapter.short ? `<p class="conversion-label">${escape(chapter.short)}</p>` : ''}
+      ${powerRoutes[chapter.id] ? `<div class="conversion-label"><span>${escape(powerRoutes[chapter.id].ends[0])}</span>${glyph('right')}<span>${escape(powerRoutes[chapter.id].ends[1])}</span></div>` : ''}
       ${chapter.id === 'start' ? `<a class="begin" href="#eleven-mile">Begin the journey ${glyph('down')}</a>` : ''}
       ${details}
       ${index === chapters.length - 1 ? `<a class="restart" href="#start">Back to the start ${glyph('up')}</a>` : ''}
@@ -126,13 +131,25 @@ app.innerHTML = `
       <div class="film-shade" aria-hidden="true"></div>
       <div class="map-evidence" aria-hidden="true"><span class="map-evidence-dot"></span><span id="map-evidence-label">Arizona</span></div>
       <div class="visual-caption" aria-hidden="true"><span id="visual-source"></span><span class="look-hint">${glyph('move')} <span>Drag to look</span></span></div>
+      <aside class="power-focus" aria-label="Power path" hidden>
+        <span class="power-focus-form"></span>
+        <strong class="power-focus-title"></strong>
+        <span class="power-focus-note"></span>
+      </aside>
+      <div class="film-handoff" aria-hidden="true" hidden>
+        <svg width="100%" height="100%">
+          <path class="handoff-path" pathLength="1"></path>
+          <circle class="handoff-bead" r="4"></circle>
+        </svg>
+        <span class="handoff-label"></span>
+      </div>
       <div class="film-progress" aria-hidden="true"></div>
     </div>
     <div class="narrative">${chapters.map(chapterMarkup).join('')}</div>
     <footer class="credits">
       <div><span class="eyebrow">Currentline</span><h2>About this journey</h2></div>
       <div class="credits-copy">
-        <p>Eleven Mile supports Meta’s Mesa campus through Salt River Project. The aerial flight shows their geographic relationship. Electricity from many sources mixes across the grid, and the dotted map line shows the camera route. Glowing beads in equipment models illustrate energy transfer. The equipment models and voltages inside the data center are representative examples.</p>
+        <p>Eleven Mile supports Meta’s Mesa campus through Salt River Project. The aerial flight shows their geographic relationship. Electricity from many sources mixes across the grid, and the dotted map line shows the camera route. Glowing beads illustrate energy transfer, and 3D distances are compressed to show the connections. The equipment and voltages inside the data center are representative examples.</p>
         <details class="bibliography"><summary>${glyph('plus')} Sources and imagery credits</summary>
           <p>${escape(geography.credits)}. Regional coverage from 2023 and site close-ups from 2025.</p>
           <div class="source-links">${sources.map(([label, url]) => external(label, url)).join('')}</div>
@@ -156,8 +173,16 @@ const sections = [...document.querySelectorAll('.chapter')];
 const index = document.querySelector('.chapter-index');
 const evidence = document.querySelector('#map-evidence-label');
 const visualSource = document.querySelector('#visual-source');
+const powerFocus = stage.querySelector('.power-focus');
+const focusForm = powerFocus.querySelector('.power-focus-form');
+const focusTitle = powerFocus.querySelector('.power-focus-title');
+const focusNote = powerFocus.querySelector('.power-focus-note');
+const handoff = stage.querySelector('.film-handoff');
+const handoffPath = handoff.querySelector('.handoff-path');
+const handoffBead = handoff.querySelector('.handoff-bead');
+const handoffLabel = handoff.querySelector('.handoff-label');
 const motion = matchMedia('(prefers-reduced-motion: reduce)');
-const narrow = matchMedia('(max-width: 760px)');
+const narrow = matchMedia('(max-width: 960px)');
 const touchedParts = new Map();
 const clamp = (value) => Math.min(1, Math.max(0, value));
 let active = -1;
@@ -168,39 +193,113 @@ let latest;
 let raf = 0;
 const fallback = equipmentHost.querySelector('.equipment-fallback');
 let fallbackId;
+let handoffFrame = 0;
+let handoffUntil = 0;
+let powerTitle;
 
 function updateMapEvidence(position) {
-  if (latest?.chapter.id !== 'grid') return;
+  if (latest?.chapter.id !== 'grid' && latest?.join?.site !== 'solarSubstation') return;
   const connection = position >= .336 && position < .475;
   const label = connection ? 'Solar grid connection · route from public plans' : 'Geographic flight · shared grid';
   if (evidence.textContent !== label) evidence.textContent = label;
 }
 
+function loadEquipment() {
+  if (startingEquipment) return;
+  startingEquipment = true;
+  import('./equipment-camera.js')
+    .then(({ createEquipmentCamera }) => {
+      equipment = createEquipmentCamera(equipmentHost);
+      equipmentHost.dataset.ready = 'true';
+      refresh();
+    })
+    .catch(() => {
+      equipmentHost.dataset.ready = 'fallback';
+      refresh();
+    });
+}
+
 function renderEquipment() {
-  if (!latest?.chapter.model || latest.chapter.shot !== 'equipment') return;
-  if (!equipment && !startingEquipment) {
-    startingEquipment = true;
-    import('./equipment-camera.js')
-      .then(({ createEquipmentCamera }) => {
-        equipment = createEquipmentCamera(equipmentHost);
-        equipmentHost.dataset.ready = 'true';
-        renderEquipment();
-      })
-      .catch(() => { equipmentHost.dataset.ready = 'fallback'; renderEquipment(); });
-  }
-  const { chapter, progress, section } = latest;
+  const { visual, chapter, section, progress, travel, next, local } = latest;
+  if (!visual?.model) return;
+  loadEquipment();
   if (!equipment) {
-    if (equipmentHost.dataset.ready === 'fallback' && fallbackId !== chapter.id) {
-      fallbackId = chapter.id;
+    if (equipmentHost.dataset.ready === 'fallback' && fallbackId !== visual.id) {
+      fallbackId = visual.id;
       fallback.hidden = false;
-      fallback.innerHTML = diagramMarkup(chapter.id);
+      fallback.innerHTML = diagramMarkup(visual.id);
     }
     return;
   }
-  const details = section.querySelector('.component-details');
+  const details = visual === chapter && section.querySelector('.component-details');
   const part = details?.open ? chapter.parts[touchedParts.get(chapter.id)] : undefined;
-  equipment.show(part?.model ?? chapter.model, { progress, quiet: motion.matches, reveal: details?.open });
+  equipment.show(part?.model ?? visual.model, {
+    baseId: visual.model,
+    progress: visual === chapter ? local : 0,
+    quiet: motion.matches,
+    reveal: details?.open,
+    nextId: next?.shot === 'equipment' ? next.model : undefined,
+    travel,
+    approach: visual === chapter ? 0 : 1 - progress,
+  });
   equipment.highlight(part);
+}
+
+function renderPowerFocus() {
+  const { chapter, travel, local, inspecting } = latest;
+  const route = powerRoutes[chapter.id];
+  powerFocus.hidden = !route || inspecting;
+  if (powerFocus.hidden) return;
+  const phase = equipment?.phase?.();
+  const index = Math.min(route.beats.length - 1, Math.floor(local * route.beats.length));
+  const [form, authoredTitle, authoredNote] = travel > .06 && route.handoff ? route.handoff : route.beats[index];
+  const partIndex = phase?.part ? chapter.parts.findIndex(({ target }) => target === phase.part) : -1;
+  const title = phase?.label ?? authoredTitle;
+  const label = phase?.form ?? form;
+  const transition = transitionNotes[phase?.id];
+  const note = phase?.note ?? (typeof transition === 'string' ? transition : transition?.[label]) ??
+    powerNotes[chapter.id]?.[partIndex]?.[1] ?? authoredNote;
+  if (powerTitle !== title || powerFocus.dataset.form !== label || focusNote.textContent !== note) {
+    powerTitle = title;
+    powerFocus.dataset.form = label;
+    focusForm.textContent = formNames[label] ?? formNames[form];
+    focusTitle.textContent = title;
+    focusNote.textContent = note;
+  }
+}
+
+function renderHandoff() {
+  handoffFrame = 0;
+  const { join, progress, chapter } = latest;
+  if (!join || progress <= 0 || progress >= 1) {
+    handoff.hidden = true;
+    return;
+  }
+  const entering = chapter.shot === 'atlas';
+  const mapAnchor = atlas?.projectSite(join.site);
+  const modelAnchor = equipment?.port?.(entering ? 'entry' : 'exit');
+  const host = equipmentHost.getBoundingClientRect();
+  const frame = stage.getBoundingClientRect();
+  const size = { width: frame.width, height: frame.height };
+  const mapPoint = mapAnchor?.visible ? { x: mapAnchor.x * size.width, y: mapAnchor.y * size.height }
+    : { x: size.width * .64, y: size.height * .42 };
+  const modelPoint = modelAnchor?.visible
+    ? { x: host.left - frame.left + modelAnchor.x * host.width, y: host.top - frame.top + modelAnchor.y * host.height }
+    : { x: size.width * (narrow.matches ? .53 : .65), y: size.height * (narrow.matches ? .27 : .47) };
+  const [a, b] = entering ? [mapPoint, modelPoint] : [modelPoint, mapPoint];
+  const x = a.x + (b.x - a.x) * progress;
+  const y = a.y + (b.y - a.y) * progress;
+  handoff.hidden = false;
+  handoff.dataset.form = join.form;
+  handoff.style.opacity = String(Math.min(1, progress * 6, (1 - progress) * 6));
+  handoffPath.setAttribute('d', `M ${a.x} ${a.y} L ${b.x} ${b.y}`);
+  handoffPath.style.strokeDasharray = `${progress} 1`;
+  handoffBead.setAttribute('cx', x);
+  handoffBead.setAttribute('cy', y);
+  handoffLabel.textContent = join.label;
+  handoffLabel.style.left = `${Math.min(size.width - 130, Math.max(130, x))}px`;
+  handoffLabel.style.top = `${Math.max(62, y - 34)}px`;
+  if (performance.now() < handoffUntil) handoffFrame = requestAnimationFrame(renderHandoff);
 }
 
 function viewport() {
@@ -215,13 +314,36 @@ function viewport() {
   rects.forEach(({ top }, at) => { if (top <= threshold) current = at; });
   const chapter = chapters[current];
   const previous = chapters[active];
+  const next = chapters[current + 1];
   const section = sections[current];
   const rect = rects[current];
-  const progress = clamp((threshold - rect.top) / Math.max(rect.height, 1));
-  latest = { chapter, progress, section };
-  const inspecting = String(Boolean(section.querySelector('.component-details[open]')));
-  if (document.documentElement.dataset.inspecting !== inspecting) document.documentElement.dataset.inspecting = inspecting;
+  const localProgress = clamp((threshold - rect.top) / Math.max(rect.height, 1));
+  const inspecting = Boolean(section.querySelector('.component-details[open]'));
+  const moving = !motion.matches && !inspecting;
+  const cross = next && next.shot !== chapter.shot && moving;
+  const join = cross ? sceneJoins[chapter.id] : undefined;
+  const progress = join ? easeBetween(localProgress, .69, 1) : 0;
+  const sameRoom = chapter.shot === 'equipment' && next?.shot === 'equipment';
+  const handoffStart = ['intake', 'distribution'].includes(chapter.id) ? .48 : .66;
+  const travelProgress = sameRoom && moving ? clamp((localProgress - handoffStart) / (1 - handoffStart)) : 0;
+  const end = sameRoom ? handoffStart : join && chapter.shot === 'equipment' ? .69 : 1;
+  const local = inspecting ? .5 : motion.matches ? .44 : clamp(localProgress / end);
+  const visual = chapter.shot === 'equipment' ? chapter : join && progress > 0 ? next : undefined;
+  const layer = chapter.shot === 'equipment' ? 1 - progress : progress;
+  latest = { chapter, section, progress, travel: travelProgress, local, next, visual, inspecting, join };
+
+  if (chapter.id === 'eleven-mile' || chapter.id === 'mesa') loadEquipment();
+  stage.toggleAttribute('data-handoff', progress > 0 && progress < 1);
+  const captionVisibility = moving && chapter.id !== 'start'
+    ? 1 - easeBetween(Math.max(progress, travelProgress), .53, .99) : 1;
+  section.style.setProperty('--caption-visibility', captionVisibility.toFixed(3));
+  stage.style.setProperty('--equipment-opacity', layer.toFixed(4));
+  stage.style.setProperty('--atlas-opacity', (1 - layer).toFixed(4));
+  document.documentElement.dataset.inspecting = String(inspecting);
+  stage.dataset.journeyPhase = travelProgress > 0 ? 'handoff' : progress > 0 ? 'match' : 'component';
   if (active !== current) {
+    if (active >= 0) sections[active].removeAttribute('data-active');
+    section.dataset.active = '';
     active = current;
     document.documentElement.dataset.chapter = chapter.id;
     stage.dataset.shot = chapter.shot;
@@ -231,23 +353,29 @@ function viewport() {
       if (link.hash === '#' + chapter.id) link.setAttribute('aria-current', 'location');
       else link.removeAttribute('aria-current');
     });
-    evidence.textContent = chapter.id === 'grid' ? 'Geographic flight · shared grid' : chapter.id === 'start' ? 'Central Arizona' : chapter.place;
-    visualSource.textContent = chapter.shot === 'atlas'
-      ? geography.credits : 'Representative equipment model';
+    evidence.textContent = chapter.id === 'grid' ? 'Geographic flight · shared grid' : chapter.place;
+    visualSource.textContent = chapter.shot === 'atlas' ? geography.credits : 'Illustrated power path';
   }
   if (chapter.shot === 'equipment' && equipmentHost.dataset.ready === 'fallback') visualSource.textContent = 'Equipment diagram';
-  if (atlas && chapter.shot === 'atlas') {
+
+  if (atlas && (chapter.shot === 'atlas' || join && progress > 0)) {
     let position = .28;
+    let approach = 0;
     if (chapter.id === 'start') position = motion.matches ? 0 : clamp(-rects[0].top / (rects[0].height - threshold)) * .28;
     if (chapter.id === 'grid') {
       const flight = clamp(-rect.top / (rect.height - threshold));
-      position = motion.matches ? .55 : .28 + flight * .72;
+      position = motion.matches ? .55 : .34 + flight * .66;
       updateMapEvidence(atlas.progress ?? position);
     }
     if (chapter.id === 'mesa') position = 1;
-    atlas.render(position, { reduced: motion.matches, immediate: previous?.shot !== 'atlas' });
+    if (join && chapter.shot === 'atlas') approach = progress;
+    if (join && chapter.shot === 'equipment') position = .34;
+    atlas.render(position, { reduced: motion.matches, approach, immediate: previous?.shot !== 'atlas' && chapter.shot === 'atlas' });
   }
   renderEquipment();
+  renderPowerFocus();
+  handoffUntil = performance.now() + 460;
+  if (!handoffFrame) handoffFrame = requestAnimationFrame(renderHandoff);
 }
 
 function refresh() {
@@ -282,7 +410,9 @@ document.addEventListener('click', (event) => {
   const part = Number(button.dataset.part);
   touchedParts.set(chapter.id, part);
   section.querySelectorAll('.part-button').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
-  section.querySelector('.part-role').textContent = chapter.parts[part].role;
+  const [context, role] = powerNotes[chapter.id]?.[part] ?? [chapter.parts[part].name, chapter.parts[part].role];
+  section.querySelector('.part-context').textContent = context;
+  section.querySelector('.part-role').textContent = role;
   highlightDiagram(section.querySelector('.power-diagram'), chapter.id, part);
   if (latest?.chapter.id === chapter.id) renderEquipment();
 });

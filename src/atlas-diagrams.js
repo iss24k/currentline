@@ -24,12 +24,12 @@ export const diagrams = {
     note: 'The panel makes DC, the kind of current that flows in one direction.',
   },
   inverter: {
-    nodes: [['dc', 'Direct current'], ['box', 'Switches + filter'], ['ac', 'Alternating current', 'AC to collection grid']],
-    note: 'AC reverses direction repeatedly. Collection transformers raise its voltage to 34.5 kV at Eleven Mile.',
+    nodes: [['dc', 'Array DC'], ['box', 'Inverter', 'Switches + filter'], ['coil', 'Pad transformer', 'Raises voltage'], ['ac', '34.5 kV AC', 'Collection cable']],
+    note: 'AC changes direction repeatedly. The inverter creates AC and the separate pad transformer raises its voltage.',
   },
   transformer: {
-    nodes: [['ac', '34.5 kV AC'], ['coil', 'Step-up transformer'], ['ac', '230 kV AC', 'To Pinal Central']],
-    note: 'A magnetic field transfers energy between coils. A higher voltage lets the grid deliver the same power with less current.',
+    nodes: [['ac', 'Input coil', '34.5 kV AC'], ['coil', 'Steel core', 'Magnetic field'], ['ac', 'Output coil', '230 kV AC']],
+    note: 'The coils are electrically separate. A changing magnetic field transfers power between them.',
   },
   intake: {
     nodes: [['ac', 'Utility AC'], ['switch', 'Switchgear', 'Protects the feed'], ['coil', 'Building transformer', 'Lowers voltage'], ['transfer', 'Transfer switch'], ['ac', '480 V AC', 'To the UPS']],
@@ -72,12 +72,12 @@ export function diagramMarkup(id) {
       ${branch ? `<div class="diagram-branch">${symbol(branch.icon)}<span>${branch.label}</span><small>${branch.detail}</small></div>` : ''}
       ${index === diagram.nodes.length - 1 ? '' : arrow}</li>`;
   }).join('');
-  return `<figure class="power-diagram"><ol>${nodes}</ol><figcaption>${diagram.note}</figcaption></figure>`;
+  return `<figure class="power-diagram" data-diagram="${id}"><ol>${nodes}</ol><figcaption>${diagram.note}</figcaption></figure>`;
 }
 
 const partNodes = {
   solar: [1, 1, 1, 2],
-  inverter: [0, 1, 1, 1],
+  inverter: [0, 1, 1, 1, 2],
   transformer: [0, 1, 1, 2],
   intake: [1, 1, 1, 1],
   ups: [1, 'branch', 3, 2],
