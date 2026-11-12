@@ -2,9 +2,9 @@
 
 Currentline is an interactive 3D field guide to electrical energy. Choose natural gas, nuclear, solar, wind, or hydroelectric generation and follow the conversions through the grid, a data center, and a server down to its processor.
 
-The guided tour moves the camera between stops and pauses on demand. You can also orbit the models, select equipment directly, open cutaways, or jump from the synchronized route and full diagram. The inspector explains each component’s inputs, outputs and operation. **Explore deeper** covers parts, materials, assembly, and connections.
+Select an energy source and begin the full-screen tour. The timeline and playback controls move between stops. **Route** opens the synchronized diagram and power branches, and **Details** opens the component explanation. Select equipment in the scene or open a cutaway to examine it more closely.
 
-![Currentline showing a gas turbine cutaway alongside the component inspector and journey map](docs/currentline.webp)
+![The full-screen Currentline tour showing an exposed combustion turbine](docs/currentline.webp)
 
 ## Run locally
 
@@ -17,7 +17,7 @@ npm ci
 npm run dev
 ```
 
-Open the loopback URL printed by Vite, normally `http://127.0.0.1:5173`. The experience runs locally and needs no account, API key, or hosted backend. For the 3D viewer, use a WebGL 2-capable browser. The journey map, inspector, guide and bibliography also work when WebGL 2 is unavailable. **Reduce motion** follows your system preference initially and can be toggled in the viewer.
+Open the loopback URL printed by Vite, normally `http://127.0.0.1:5173`. The experience runs locally and needs no account, API key, or hosted backend. For the 3D viewer, use a WebGL 2-capable browser. The journey map, inspector, guide and bibliography also work when WebGL 2 is unavailable. **Reduce motion** follows your system preference initially and can be changed under **About** or **Route → Field guide**. Drag to orbit, scroll or press +/− to zoom, and double-click or press 0 to reset.
 
 ## The architecture in the exhibit
 
@@ -41,7 +41,7 @@ The app’s **Sources** panel lists 54 references, with relevant links on all 27
 
 ## How the project is organized
 
-[Three.js](https://threejs.org/docs/pages/WebGLRenderer) provides the real-time camera, lighting, mesh picking and procedural geometry. [Vite](https://v6.vite.dev/guide/) builds the static app. Native HTML controls, CSS and JavaScript keep the learning content and navigation independent of the renderer. Fonts and icons are bundled locally. The 3D equipment and lighting are original procedural assets.
+[Three.js](https://threejs.org/docs/pages/WebGLRenderer) provides the real-time camera, lighting, mesh picking and procedural geometry. [Vite](https://v6.vite.dev/guide/) builds the static app. Native HTML controls, CSS and JavaScript keep the learning content and navigation independent of the renderer. Fonts and icons are bundled locally. The 3D equipment and lighting are original procedural assets. The opening photograph is Charles Devaux’s [Power lines](https://commons.wikimedia.org/wiki/File:Power_lines_(Unsplash).jpg), available under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 
 | File | Purpose |
 | --- | --- |

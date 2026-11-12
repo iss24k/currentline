@@ -6,22 +6,22 @@ function finish(color, metalness = 0.4, roughness = 0.5, emissive = 0x000000, em
 }
 
 const material = {
-  nickel: finish(0xa6b9c5, 0.55, 0.36),
-  steel: finish(0x566a7b, 0.56, 0.46),
-  navy: finish(0x263b50, 0.42),
-  dark: finish(0x101f2d, 0.32),
-  black: finish(0x090e13, 0.15, 0.64),
-  white: finish(0xd3e2e7, 0.36),
-  rubber: finish(0x263541, 0.04, 0.85),
-  ceramic: finish(0x627982, 0.2, 0.32),
-  copper: finish(0xca7f4c, 0.58, 0.34),
-  gold: finish(0xe0ae60, 0.46, 0.34),
-  amber: finish(0xfab653, 0.19, 0.3, 0xff8d28, 1.1),
-  aqua: finish(0x75dfec, 0.23, 0.31, 0x43bfdc, 0.88),
-  blue: finish(0x335d84, 0.52, 0.42),
-  glass: finish(0x203e52, 0.4, 0.22, 0x1a4753, 0.35),
-  pcb: finish(0x27605b, 0.26, 0.55),
-  red: finish(0xb45d44, 0.35, 0.46),
+  nickel: finish(0xa8ada8, 0.63, 0.38),
+  steel: finish(0x656b66, 0.58, 0.46),
+  navy: finish(0x404744, 0.37),
+  dark: finish(0x242928, 0.28),
+  black: finish(0x101211, 0.15, 0.64),
+  white: finish(0xd0d1c6, 0.32),
+  rubber: finish(0x2c302d, 0.04, 0.85),
+  ceramic: finish(0x76796e, 0.14, 0.34),
+  copper: finish(0xa46b48, 0.63, 0.36),
+  gold: finish(0xc59c5d, 0.56, 0.38),
+  amber: finish(0xc99b56, 0.19, 0.36, 0xae6c27, .52),
+  aqua: finish(0x87afa9, 0.20, 0.37, 0x528b81, .46),
+  blue: finish(0x4a5b5c, 0.39, 0.51),
+  glass: finish(0x344345, 0.4, 0.22, 0x233333, 0.21),
+  pcb: finish(0x3a5043, 0.21, 0.58),
+  red: finish(0xa2614e, 0.35, 0.46),
 };
 
 function mesh(parent, geometry, surface, x = 0, y = 0, z = 0) {
@@ -72,7 +72,7 @@ function tube(parent, points, radius, surface) {
   return mesh(parent, new THREE.TubeGeometry(curve, Math.max(12, points.length * 5), radius, 8, false), surface);
 }
 
-function label(parent, text, x, y, z, width, height, accent = '#c3e0e8') {
+function label(parent, text, x, y, z, width, height, accent = '#cad1c5') {
   box(parent, x, y, z - 0.01, width + 0.045, height + 0.045, 0.035, material.dark, 0.012);
   if (typeof document === 'undefined') return;
   const canvas = document.createElement('canvas');
@@ -80,7 +80,7 @@ function label(parent, text, x, y, z, width, height, accent = '#c3e0e8') {
   canvas.height = Math.max(36, Math.round(canvas.width * height / width));
   const context = canvas.getContext('2d');
   if (!context) return;
-  context.fillStyle = '#10212e';
+  context.fillStyle = '#262c29';
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.fillStyle = accent;
   context.fillRect(8, 9, 3, canvas.height - 18);
@@ -631,7 +631,7 @@ function rackPdu(cutaway = false) {
     for (let outlet = 0; outlet < 13; outlet++) {
       box(rack, pduX, 0.58 + outlet * 0.213, 1.33, 0.155, 0.116, 0.053, material.black, 0.015);
     }
-    label(rack, index === 0 ? 'RACK / 01' : 'RACK PDU', 0, 3.95, 1.19, 1.44, 0.21, index === 0 ? '#c3e0e8' : '#ffd197');
+    label(rack, index === 0 ? 'RACK / 01' : 'RACK PDU', 0, 3.95, 1.19, 1.44, 0.21, index === 0 ? '#cad1c5' : '#ffd197');
     if (index === 1) {
       for (const y of [0.99, 2.03, 2.66]) {
         tube(rack, [[pduX, y, 1.34], [1.22, y, 1.5], [1.04, y - 0.14, 1.52], [0.73, y - 0.14, 1.26], [0.68, y - 0.11, 1.12]], 0.039, material.gold);

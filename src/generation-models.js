@@ -1,19 +1,22 @@
 import * as THREE from 'three';
 
-const steel = material(0x657d93, 0.40);
-const chrome = material(0xaec8d8, 0.48, 0.27);
-const navy = material(0x263d56, 0.30);
-const dark = material(0x122233, 0.20);
-const graphite = material(0x304459, 0.28);
-const white = material(0xb7cfda, 0.22);
-const concrete = material(0x677988, 0.06, 0.85);
-const copper = material(0xc8804e, 0.38, 0.31);
-const bronze = material(0x7e5645, 0.25);
-const cyan = material(0x52c4ed, 0.22, 0.33, 0x0b5981, 0.50);
-const amber = material(0xf6af56, 0.22, 0.38, 0xac480b, 0.46);
-const glass = material(0x176696, 0.32, 0.23, 0x073a69, 0.38);
-const water = material(0x20668c, 0.32, 0.22, 0x0a2634, 0.33);
-const shadow = material(0x0c1924, 0.10, 0.74);
+const steel = material(0x767a77, 0.58);
+const chrome = material(0xbbc0bc, 0.72, 0.32);
+const navy = material(0x3c4442, 0.34);
+const dark = material(0x252928, 0.21);
+const graphite = material(0x464a46, 0.38);
+const white = material(0xbec2b8, 0.22);
+const concrete = material(0x85847a, 0.06, 0.85);
+const copper = material(0x9e6543, 0.61, 0.36);
+const bronze = material(0x765344, 0.45);
+const cyan = material(0x89a8a7, 0.22, 0.37, 0x325450, 0.34);
+const amber = material(0xc3985e, 0.29, 0.43, 0x7a4d1f, 0.22);
+const glass = material(0x2b4948, 0.46, 0.22, 0x1e3530, 0.16);
+const water = material(0x314b4b, 0.35, 0.22, 0x192b26, 0.18);
+const siding = material(0x888d86, 0.39, 0.65);
+const rib = material(0x6f756e, 0.46, 0.62);
+const paintedPipe = material(0xb69c57, 0.24, 0.49);
+const shadow = material(0x1f2422, 0.10, 0.74);
 
 function material(color, metalness, roughness = 0.47, emissive = 0x000000, emissiveIntensity = 0) {
   return new THREE.MeshStandardMaterial({color, metalness, roughness, emissive, emissiveIntensity});
@@ -113,10 +116,16 @@ function gasPlant() {
   const root = group();
   skid(root, 6.8, 5.0);
   const building = group(root, -0.23, 0.31, -1.45);
-  box(building, 0, 1.15, 0, 5.05, 2.30, 1.68, navy);
+  box(building, 0, 1.15, 0, 5.05, 2.30, 1.68, siding);
+  for (let x = -2.46; x < 2.50; x += 0.16) {
+    box(building, x, 1.15, 0.85, 0.02, 2.25, 0.026, rib);
+  }
+  for (let z = -.76; z <= .77; z += 0.16) {
+    for (const x of [-2.535, 2.535]) box(building, x, 1.15, z, 0.026, 2.25, 0.025, rib);
+  }
   box(building, 0, 2.34, 0, 5.24, 0.17, 1.88, chrome);
   box(building, 0, 2.47, 0, 4.94, 0.09, 1.62, graphite);
-  box(building, 0, 2.15, 0.853, 4.94, 0.035, 0.035, cyan);
+  box(building, 0, 2.15, 0.871, 4.94, 0.047, 0.048, steel);
   for (const x of [-2.30, -1.51, -0.74, 0.05, 0.83, 1.62, 2.35]) {
     box(building, x, 1.14, 0.853, 0.046, 2.16, 0.074, steel);
   }
@@ -148,7 +157,7 @@ function gasPlant() {
     box(vessels, 0.18, 0.82, z + 0.32, 0.43, 0.068, 0.025, cyan);
   }
   const manifold = group(root);
-  pipe(manifold, [[-3.38, 0.60, 2.11], [-2.41, 0.60, 2.11], [-2.41, 1.02, 2.11], [1.83, 1.02, 2.11], [1.83, 0.60, 2.11], [3.35, 0.60, 2.11]], 0.105, copper);
+  pipe(manifold, [[-3.38, 0.60, 2.11], [-2.41, 0.60, 2.11], [-2.41, 1.02, 2.11], [1.83, 1.02, 2.11], [1.83, 0.60, 2.11], [3.35, 0.60, 2.11]], 0.105, paintedPipe);
   for (const x of [-2.40, 0.24, 1.82]) {
     box(manifold, x, 0.46, 2.10, 0.29, 0.25, 0.32, dark);
     cylinder(manifold, x, 1.02, 2.11, 0.16, 0.16, 0.21, bronze, 'x', 12);
